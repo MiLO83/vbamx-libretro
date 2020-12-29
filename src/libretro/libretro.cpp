@@ -48,7 +48,6 @@ static retro_input_poll_t poll_cb;
 static retro_input_state_t input_cb;
 static retro_environment_t environ_cb;
 static retro_set_rumble_state_t rumble_cb;
-retro_audio_sample_t audio_cb;
 retro_audio_sample_batch_t audio_batch_cb;
 
 static char retro_system_directory[2048];
@@ -56,6 +55,7 @@ static char biosfile[4096];
 static bool can_dupe = false;
 
 // core options
+
 static bool option_sndInterpolation = true;
 static bool option_useBios = false;
 static bool option_colorizerHack = false;
@@ -433,7 +433,6 @@ void retro_set_video_refresh(retro_video_refresh_t cb)
 
 void retro_set_audio_sample(retro_audio_sample_t cb)
 {
-    audio_cb = cb;
 }
 
 void retro_set_audio_sample_batch(retro_audio_sample_batch_t cb)
@@ -587,8 +586,8 @@ void retro_get_system_info(struct retro_system_info *info)
 void retro_get_system_av_info(struct retro_system_av_info *info)
 {
    double aspect = (3.0f / 2.0f);
-   unsigned maxWidth  = gbaWidth;
-   unsigned maxHeight = gbaHeight;
+   unsigned maxWidth  = gbaWidth * enhance_multiplier;
+   unsigned maxHeight = gbaHeight * enhance_multiplier;
 
    if (type == IMAGE_GB) {
       aspect = !gbBorderOn ? (10.0 / 9.0) : (8.0 / 7.0);
@@ -596,10 +595,10 @@ void retro_get_system_av_info(struct retro_system_av_info *info)
       maxHeight = !gbBorderOn ? gbHeight : sgbHeight;
    }
 
-   info->geometry.base_width = systemWidth * 7;
-   info->geometry.base_height = systemHeight * 2;
-   info->geometry.max_width = maxWidth * 7;
-   info->geometry.max_height = maxHeight * 2;
+   info->geometry.base_width = systemWidth * enhance_multiplier;
+   info->geometry.base_height = systemHeight * enhance_multiplier;
+   info->geometry.max_width = maxWidth * enhance_multiplier;
+   info->geometry.max_height = maxHeight * enhance_multiplier;
    info->geometry.aspect_ratio = aspect;
    info->timing.fps = FRAMERATE;
    info->timing.sample_rate = SAMPLERATE;
@@ -1087,13 +1086,27 @@ static void update_variables(bool startup)
         option_useBios = (!strcmp(var.value, "enabled")) ? true : false;
     }
 
+    var.key = "vbam_loadtiles";
+    var.value = NULL;
+
+    if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value) {
+        option_loadTiles = (!strcmp(var.value, "enabled")) ? true : false;
+    }
+
+    var.key = "vbam_dumptiles";
+    var.value = NULL;
+
+    if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value) {
+        option_dumpTiles = (!strcmp(var.value, "enabled")) ? true : false;
+    }
+
     var.key = "vbam_forceRTCenable";
     var.value = NULL;
 
     if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value) {
         option_forceRTCenable = (!strcmp(var.value, "enabled")) ? true : false;
     }
-
+   
     var.key = "vbam_solarsensor";
     var.value = NULL;
 
@@ -1786,11 +1799,10 @@ bool systemCanChangeSoundQuality(void)
 
 void systemDrawScreen(void)
 {
-    unsigned pitch = (systemWidth * 7) * (systemColorDepth >> 3);
-    //if (ifb_filter_func)
-        //ifb_filter_func(pix, pitch, systemWidth, systemHeight);
-
-    video_cb(lpix, systemWidth * 7, systemHeight * 2, pitch);
+    unsigned pitch = (systemWidth * enhance_multiplier) * (systemColorDepth >> 3);
+    if (ifb_filter_func)
+        ifb_filter_func(pix, pitch, systemWidth * enhance_multiplier, systemHeight * enhance_multiplier);
+    video_cb(pix, systemWidth * enhance_multiplier, systemHeight * enhance_multiplier, pitch);
 }
 
 void systemFrame(void)

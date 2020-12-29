@@ -3315,9 +3315,9 @@ void gbInit()
     gbMemory = (uint8_t*)malloc(65536);
 
 #ifdef __LIBRETRO__
-    pix = (uint8_t*)calloc(1, 4 * 256 * 224);
+    pix = (uint8_t*)calloc(1, 4 * 256 * 224 * 6);
 #else
-    pix = (uint8_t*)calloc(1, 4 * 257 * 226);
+    pix = (uint8_t*)calloc(1, 4 * 257 * 226 * 6);
 #endif
 
     gbLineBuffer = (uint16_t*)malloc(160 * sizeof(uint16_t));

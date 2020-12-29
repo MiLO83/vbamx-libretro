@@ -74,6 +74,40 @@ extern "C" {
 /* RETRO_LANGUAGE_TURKISH */
 
 struct retro_core_option_definition option_defs_tr[] = {
+    
+    {
+        "vbam_loadtiles",
+        "Load Tiles",
+        "Enable / Disable loading enhanced tiles.",
+        {
+            { "disabled",  NULL },
+            { "enabled",   NULL },
+            { NULL, NULL },
+        },
+        "disabled"
+    },
+    {
+        "vbam_dumptiles",
+        "Dump Tiles",
+        "Enable / Disable dumping screen tiles every 90 frames.",
+        {
+            { "disabled",  NULL },
+            { "enabled",   NULL },
+            { NULL, NULL },
+        },
+        "disabled"
+    },
+    {
+        "vbam_usebios",
+        "Resmi BIOS'u kullanın (Varsa)",
+        "Mümkün olduğunda resmi BIOS kullanın. Değişikliklerin uygulanabilmesi için çekirdeğin yeniden başlatılması gerekiyor.",
+        {
+            { "disabled",  NULL },
+            { "enabled",   NULL },
+            { NULL, NULL },
+        },
+        "disabled"
+    },
     {
         "vbam_solarsensor",
         "Solar Sensör Seviyesi",
@@ -93,17 +127,6 @@ struct retro_core_option_definition option_defs_tr[] = {
             { NULL, NULL },
         },
         "0"
-    },
-    {
-        "vbam_usebios",
-        "Resmi BIOS'u kullanın (Varsa)",
-        "Mümkün olduğunda resmi BIOS kullanın. Değişikliklerin uygulanabilmesi için çekirdeğin yeniden başlatılması gerekiyor.",
-        {
-            { "disabled",  NULL },
-            { "enabled",   NULL },
-            { NULL, NULL },
-        },
-        "disabled"
     },
     {
         "vbam_forceRTCenable",

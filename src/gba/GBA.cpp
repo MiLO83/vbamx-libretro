@@ -4,8 +4,10 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <map>
-#include <set>
+#include <iostream>
+#include <fstream>
+#include <sys/stat.h>
+#include <thread>
 #ifndef _MSC_VER
 #include <strings.h>
 #endif
@@ -14,6 +16,8 @@
 #include "../Util.h"
 #include "../common/ConfigManager.h"
 #include "../common/Port.h"
+#include "../common/EasyBMP/EasyBMP.h"
+#include <algorithm>
 #include "Cheats.h"
 #include "EEprom.h"
 #include "Flash.h"
@@ -29,7 +33,9 @@
 #include "bios.h"
 #include "elf.h"
 #include "ereader.h"
-
+#include <iostream>
+#include "../common/sha256.h"
+#include "../common/TilePatches.h"
 #ifdef PROFILING
 #include "prof/prof.h"
 #endif
@@ -37,13 +43,15 @@
 #ifdef __GNUC__
 #define _stricmp strcasecmp
 #endif
-
+int numberOfDumps = 0;
+std::thread enhance;
+bool busyEnhancing = false;
+std::string previousTest;
 extern int emulating;
 bool debugger;
-
 int SWITicks = 0;
 int IRQTicks = 0;
-
+bool enhancing = false;
 uint32_t mastercode = 0;
 int layerEnableDelay = 0;
 bool busPrefetch = false;
@@ -546,13 +554,11 @@ void CPUUpdateWindow1()
         }
     }
 }
-extern int linePrio[4];
-extern bool layerEnab[6];
-extern uint32_t* BGLine[4];
-extern uint32_t line0[240];
-extern uint32_t line1[240];
-extern uint32_t line2[240];
-extern uint32_t line3[240];
+
+extern uint32_t line0[4][4][240];
+extern uint32_t line1[4][4][240];
+extern uint32_t line2[4][4][240];
+extern uint32_t line3[4][4][240];
 
 #define CLEAR_ARRAY(a)                  \
     {                                   \
@@ -564,17 +570,34 @@ extern uint32_t line3[240];
 
 void CPUUpdateRenderBuffers(bool force)
 {
+    
     if (!(layerEnable & 0x0100) || force) {
-        CLEAR_ARRAY(line0);
+        for (int r = 0; r < enhance_multiplier; r++) { 
+            for (int l = 0; l < enhance_multiplier; l++) { 
+                CLEAR_ARRAY(line0[r][l]);
+            }
+        }
     }
     if (!(layerEnable & 0x0200) || force) {
-        CLEAR_ARRAY(line1);
+        for (int r = 0; r < enhance_multiplier; r++) { 
+            for (int l = 0; l < enhance_multiplier; l++) { 
+                CLEAR_ARRAY(line1[r][l]);
+            }
+        }
     }
     if (!(layerEnable & 0x0400) || force) {
-        CLEAR_ARRAY(line2);
+        for (int r = 0; r < enhance_multiplier; r++) { 
+            for (int l = 0; l < enhance_multiplier; l++) { 
+                CLEAR_ARRAY(line2[r][l]);
+            }
+        }
     }
     if (!(layerEnable & 0x0800) || force) {
-        CLEAR_ARRAY(line3);
+        for (int r = 0; r < enhance_multiplier; r++) { 
+            for (int l = 0; l < enhance_multiplier; l++) { 
+                CLEAR_ARRAY(line3[r][l]);
+            }
+        }
     }
 }
 
@@ -600,14 +623,14 @@ unsigned int CPUWriteState(uint8_t* data, unsigned size)
     utilWriteMem(data, workRAM, SIZE_WRAM);
     utilWriteMem(data, vram, SIZE_VRAM);
     utilWriteMem(data, oam, SIZE_OAM);
-    utilWriteMem(data, pix[0], SIZE_PIX);
+    utilWriteMem(data, pix, (4 * 241 * 162 * enhance_multiplier));
     utilWriteMem(data, ioMem, SIZE_IOMEM);
 
     eepromSaveGame(data);
     flashSaveGame(data);
     soundSaveGame(data);
     rtcSaveGame(data);
-
+    dumpScreen = true;
     return (ptrdiff_t)data - (ptrdiff_t)orig;
 }
 
@@ -650,7 +673,7 @@ bool CPUReadState(const uint8_t* data, unsigned size)
     utilReadMem(workRAM, data, SIZE_WRAM);
     utilReadMem(vram, data, SIZE_VRAM);
     utilReadMem(oam, data, SIZE_OAM);
-    utilReadMem(pix[0], data, SIZE_PIX);
+    utilReadMem(pix, data, (4 * 241 * 162 * enhance_multiplier));
     utilReadMem(ioMem, data, SIZE_IOMEM);
 
     eepromReadGame(data, version);
@@ -665,10 +688,14 @@ bool CPUReadState(const uint8_t* data, unsigned size)
     CPUUpdateRender();
 
     // CPU Update Render Buffers set to true
-    CLEAR_ARRAY(line0);
-    CLEAR_ARRAY(line1);
-    CLEAR_ARRAY(line2);
-    CLEAR_ARRAY(line3);
+    for (int r = 0; r < 6; r++) {
+        for (int l = 0; l < enhance_multiplier; l++) { 
+            CLEAR_ARRAY(line0[r][l]);
+            CLEAR_ARRAY(line1[r][l]);
+            CLEAR_ARRAY(line2[r][l]);
+            CLEAR_ARRAY(line3[r][l]);
+        }
+    }
     // End of CPU Update Render Buffers set to true
 
     CPUUpdateWindow0();
@@ -684,7 +711,7 @@ bool CPUReadState(const uint8_t* data, unsigned size)
     }
 
     CPUUpdateRegister(0x204, CPUReadHalfWordQuick(0x4000204));
-
+    
     return true;
 }
 
@@ -712,7 +739,7 @@ static bool CPUWriteState(gzFile gzFile)
     utilGzWrite(gzFile, workRAM, SIZE_WRAM);
     utilGzWrite(gzFile, vram, SIZE_VRAM);
     utilGzWrite(gzFile, oam, SIZE_OAM);
-    utilGzWrite(gzFile, pix[0], SIZE_PIX);
+    utilGzWrite(gzFile, pix, SIZE_PIX);
     utilGzWrite(gzFile, ioMem, SIZE_IOMEM);
 
     eepromSaveGame(gzFile);
@@ -827,9 +854,9 @@ static bool CPUReadState(gzFile gzFile)
     utilGzRead(gzFile, vram, SIZE_VRAM);
     utilGzRead(gzFile, oam, SIZE_OAM);
     if (version < SAVE_GAME_VERSION_6)
-        utilGzRead(gzFile, pix[0], 4 * 240 * 160);
+        utilGzRead(gzFile, pix, 4 * (240 * enhance_multiplier) * (160 * enhance_multiplier));
     else
-        utilGzRead(gzFile, pix[0], SIZE_PIX);
+        utilGzRead(gzFile, pix, 4 * (240 * enhance_multiplier) * (160 * enhance_multiplier));
     utilGzRead(gzFile, ioMem, SIZE_IOMEM);
 
     if (skipSaveGameBattery) {
@@ -1264,12 +1291,12 @@ bool CPUReadBatteryFile(const char* fileName)
 
 bool CPUWritePNGFile(const char* fileName)
 {
-    return utilWritePNGFile(fileName, 240 * 7, 160 * 2, lpix);
+    return utilWritePNGFile(fileName, 240 * enhance_multiplier, 160 * enhance_multiplier, pix);
 }
 
 bool CPUWriteBMPFile(const char* fileName)
 {
-    return utilWriteBMPFile(fileName, 240 * 7, 160 * 2, lpix);
+    return utilWriteBMPFile(fileName, 240 * enhance_multiplier, 160 * enhance_multiplier, pix);
 }
 
 bool CPUIsZipFile(const char* file)
@@ -1386,16 +1413,12 @@ void CPUCleanUp()
         free(bios);
         bios = NULL;
     }
-    for (int rp = 0; rp < 7; rp++) {
-        if (pix[rp] != NULL) {
-            free(pix[rp]);
-            pix[rp] = NULL;
-        }
+
+    if (pix != NULL) {
+        free(pix);
+        pix = NULL;
     }
-    if (lpix != NULL) {
-        free(lpix);
-        lpix = NULL;
-    }
+
     if (oam != NULL) {
         free(oam);
         oam = NULL;
@@ -1547,6 +1570,17 @@ int CPULoadRom(const char* szFile)
         CPUCleanUp();
         return 0;
     }
+    for (int r = 0; r < enhance_multiplier; r++) { 
+        for (int l = 0; l < enhance_multiplier; l++) { 
+        vramx[(r*enhance_multiplier)+l] = (uint8_t*)calloc(1, SIZE_VRAM);
+        if (vramx[(r*enhance_multiplier)+l] == NULL) {
+            systemMessage(MSG_OUT_OF_MEMORY, N_("Failed to allocate memory for %s"),
+                "VRAMx");
+            CPUCleanUp();
+            return 0;      
+            }
+        }
+    }
     oam = (uint8_t*)calloc(1, SIZE_OAM);
     if (oam == NULL) {
         systemMessage(MSG_OUT_OF_MEMORY, N_("Failed to allocate memory for %s"),
@@ -1554,19 +1588,11 @@ int CPULoadRom(const char* szFile)
         CPUCleanUp();
         return 0;
     }
-    for (int rp = 0; rp < 7; rp++) {
-        pix[rp] = (uint8_t*)calloc(1, 4 * 241 * 162);
-        if (pix[rp] == NULL) {
-            systemMessage(MSG_OUT_OF_MEMORY, N_("Failed to allocate memory for %s"),
-                "PIX");
-            CPUCleanUp();
-            return 0;
-        }
-    }
-    lpix = (uint8_t*)calloc(1, 4 * 241 * 162 * 7 * 2);
-    if (lpix == NULL) {
+
+    pix = (uint8_t*)calloc(1, 4 * (241 * enhance_multiplier) * (162 * enhance_multiplier));
+    if (pix == NULL) {
         systemMessage(MSG_OUT_OF_MEMORY, N_("Failed to allocate memory for %s"),
-            "LPIX");
+            "PIX");
         CPUCleanUp();
         return 0;
     }
@@ -1648,6 +1674,17 @@ int CPULoadRomData(const char* data, int size)
         CPUCleanUp();
         return 0;
     }
+    for (int r = 0; r < enhance_multiplier; r++) { 
+        for (int l = 0; l < enhance_multiplier; l++) { 
+        vramx[(r*enhance_multiplier)+l] = (uint8_t*)calloc(1, SIZE_VRAM);
+        if (vramx[(r*enhance_multiplier)+l] == NULL) {
+            systemMessage(MSG_OUT_OF_MEMORY, N_("Failed to allocate memory for %s"),
+                "VRAMx");
+            CPUCleanUp();
+            return 0;      
+            }
+        }
+    }
     oam = (uint8_t*)calloc(1, SIZE_OAM);
     if (oam == NULL) {
         systemMessage(MSG_OUT_OF_MEMORY, N_("Failed to allocate memory for %s"),
@@ -1655,19 +1692,11 @@ int CPULoadRomData(const char* data, int size)
         CPUCleanUp();
         return 0;
     }
-    for (int rp = 0; rp < 7; rp++) {
-        pix[rp] = (uint8_t*)calloc(1, 4 * 240 * 160);
-        if (pix[rp] == NULL) {
-            systemMessage(MSG_OUT_OF_MEMORY, N_("Failed to allocate memory for %s"),
-                "PIX");
-            CPUCleanUp();
-            return 0;
-        }
-    }
-    lpix = (uint8_t*)calloc(1, 4 * 240 * 160 * 7 * 2);
-    if (lpix == NULL) {
+
+    pix = (uint8_t*)calloc(1, 4 * (240 * enhance_multiplier) * (160 * enhance_multiplier));
+    if (pix == NULL) {
         systemMessage(MSG_OUT_OF_MEMORY, N_("Failed to allocate memory for %s"),
-            "LPIX");
+            "PIX");
         CPUCleanUp();
         return 0;
     }
@@ -1731,6 +1760,7 @@ void SetSaveDotCodeFile(const char* szFile)
 
 void CPUUpdateRender()
 {
+    
     switch (DISPCNT & 7) {
     case 0:
         if ((!fxOn && !windowOn && !(layerEnable & 0x8000)) || cpuDisableSfx)
@@ -1782,6 +1812,7 @@ void CPUUpdateRender()
     default:
         break;
     }
+    
 }
 
 void CPUUpdateCPSR()
@@ -3249,6 +3280,8 @@ uint8_t cpuLowestBitSet[256];
 
 void CPUInit(const char* biosFileName, bool useBiosFile)
 {
+    std::string dir = "vbamx";
+    mkdir(dir.c_str());
 #ifdef WORDS_BIGENDIAN
     if (!cpuBiosSwapped) {
         for (unsigned int i = 0; i < sizeof(myROM) / 4; i++) {
@@ -3339,6 +3372,8 @@ void CPUInit(const char* biosFileName, bool useBiosFile)
     } else {
         agbPrintEnable(false);
     }
+
+
 }
 
 void SetSaveType(int st)
@@ -3407,11 +3442,14 @@ void CPUReset()
     // clean palette
     memset(paletteRAM, 0, SIZE_PRAM);
     // clean picture
-    for (int rp = 0; rp < 7; rp++) {
-        memset(pix[rp], 0, SIZE_PIX);
-    }
+    memset(pix, 0, SIZE_PIX);
     // clean vram
     memset(vram, 0, SIZE_VRAM);
+    for (int r = 0; r < enhance_multiplier; r++) { 
+        for (int l = 0; l < enhance_multiplier; l++) { 
+            memset(vramx[(r*enhance_multiplier)+l], 0, SIZE_VRAM);
+        }
+    }
     // clean io memory
     memset(ioMem, 0, SIZE_IOMEM);
 
@@ -3684,17 +3722,334 @@ static void gbaUpdateJoypads(void)
         }
     }
 }
-struct comp
-{
-    template<typename T>
-    bool operator()(const T& l, const T& r) const
-    {
-        if (l.second != r.second)
-            return l.second < r.second;
 
-        return l.first < r.first;
+void TileEnhancement()
+{
+    /*
+    if (option_dumpTiles) {
+        
+        if (dumpWait++ >= dumpIntreval) {
+            dumpWait = 0;
+            dumpScreen = true;
+            log("Dumping Screen Tiles...\n");
+        }
+        else {
+            dumpScreen = false;
+        }
     }
-};
+    
+ else {
+        dumpScreen = false;
+    }
+    */
+    if (loadWait++ >= loadIntreval) {
+        loadWait = 0;
+        loadTiles = true;
+    }
+    else {
+        if (!bpp4Writes.empty() || !bpp8Writes.empty()) {
+            loadTiles = true;
+        }
+        else {
+            loadTiles = false;
+        }
+    }
+        if (dumpScreen) {
+            vramdump = "";
+            vramfile = "";
+            if (!screenTileStartAddresses.empty()) {
+                screenTilePalettesit = screenTilePalettes.begin();
+
+                for (screenTileStartAddressesit = screenTileStartAddresses.begin(); screenTileStartAddressesit != screenTileStartAddresses.end(); screenTileStartAddressesit++) {
+                    if (*screenTilePalettesit == 256) {
+                        bpp8Writes.push_front(*screenTileStartAddressesit);
+                        bpp8Palettes.push_front(*screenTilePalettesit);
+
+                    }
+                    else {
+                        bpp4Writes.push_front(*screenTileStartAddressesit);
+                        bpp4Palettes.push_front(*screenTilePalettesit);
+
+                    }
+                    screenTilePalettesit++;
+                }
+            }
+        }
+        else {
+            if (loadWait == 0) {
+                for (int c = 0; c < 65536; c += 32) {
+
+                    bpp4Writes.push_back(c);
+                }
+                
+            }
+            
+        }
+    
+
+    if (!bpp4Writes.empty()) {
+        if (option_dumpTiles && dumpScreen) {
+            bpp4Palettesit = bpp4Palettes.begin();
+            bpp8Palettesit = bpp8Palettes.begin();
+        }
+        for (bpp4it = bpp4Writes.begin(); bpp4it != bpp4Writes.end(); bpp4it++) {
+            bool found = false;
+            if (!bpp4Processed.empty())
+                for (bpp4Processedit = bpp4Processed.begin(); bpp4Processedit != bpp4Processed.end(); bpp4Processedit++) {
+                    if (*bpp4it == *bpp4Processedit) {
+                        found = true;
+                    }
+                }
+
+
+
+            if (found == false) {
+
+                //log("VRAM WRITE 4BPP TILE AT : %08x\n", bpp4it);
+
+                uint8_t input_bin[(((8 * enhance_multiplier)) * ((8 * enhance_multiplier)) + 1024)];
+                std::string hex;
+                for (int i = 0; i < 64; i++) {
+                    hex += vram[*bpp4it + i];
+                }
+                {
+                    std::string sha = sha256(hex);
+                    if (sha != "f5a5fd42d16a20302798ef6ed309979b43003d2320d9f0e8ea9831a92759fb4b") {
+                        std::string res = "vbamx/";
+                        char romname[12UL + 1];
+                        memcpy(romname, &rom[0xa0], 12UL);
+                        romname[12UL] = 0;
+                        for (int c = 0; c < 12; c++) {
+                            if (romname[c] != 0) {
+                                res += romname[c];
+                            }
+                        }
+                        if (option_dumpTiles && dumpScreen) {
+                            mkdir(res.c_str());
+                        }
+                        res += "/";
+                        res += std::to_string(enhance_multiplier);
+                        if (option_dumpTiles && dumpScreen) {
+                            mkdir(res.c_str());
+                        }
+                        res += "/";
+                        vramfile = res;
+                        vramfile += "index.vram";
+                        if (option_dumpTiles && dumpScreen) {
+                            mkdir(res.c_str());
+                        }
+                        std::string filename_4bpp = res + sha + ".4bpp";
+                        std::string filename_4bpx = res + sha + ".4bpx";
+                        
+                            FILE* fileread = fopen(filename_4bpp.c_str(), "rb");
+
+                            if (fileread != NULL) {
+                                if (option_loadTiles && loadTiles) {
+                                    log("Refreshing Screen Tiles...\n");
+                                int i = 0;
+                                for (int y = 0; y < enhance_multiplier; y++) {
+                                    for (int x = 0; x < enhance_multiplier; x++) {
+                                        for (int iy = 0; iy < 8; iy++) {
+                                            for (int ix = 0; ix < 8; ix++) {
+
+                                                vramx[(y * enhance_multiplier) + x][(iy * 8) + ix + *bpp4it] = fgetc(fileread); //replace_bin[i];
+
+                                                i++;
+                                            }
+                                        }
+                                    }
+                                }
+                                i = 0;
+                            }
+                        }
+                        else {
+                            if (option_dumpTiles && dumpScreen && !screenTileStartAddresses.empty()) {
+                                FILE* filex = fopen(filename_4bpx.c_str(), "wb");
+                                if (filex != NULL) {
+                                    int i = 0;
+                                    for (int y = 0; y < enhance_multiplier; y++) {
+                                        for (int x = 0; x < enhance_multiplier; x++) {
+                                            for (int iy = 0; iy < 8; iy++) {
+                                                for (int ix = 0; ix < 8; ix++) {
+
+                                                    input_bin[i] = vramx[(y * enhance_multiplier) + x][(iy * 8) + ix + *bpp4it];
+
+                                                    i++;
+                                                }
+                                            }
+                                        }
+                                    }
+
+
+
+                                    for (int p = 0; p < 1024; p++) {
+                                        input_bin[p + i] = paletteRAM[p];
+                                    }
+                                    fwrite(input_bin, (sizeof(input_bin)), sizeof(uint8_t), filex);
+                                    vramdump += sha;
+                                    vramdump += ".4bpx";
+                                    vramdump += ",";
+                                    vramdump += std::to_string((uint32_t)((*bpp4Palettesit)));
+                                    vramdump += "\n";
+
+                                }
+                                fclose(filex);
+                            }
+
+                        }
+
+
+                        bpp4Processed.push_front(*bpp4it);
+                        if (fileread != NULL) {
+                            fclose(fileread);
+                        }
+                    }
+
+                }
+            }
+
+            if (option_dumpTiles && dumpScreen) {
+                bpp4Palettesit++;
+            }
+        }
+    }
+
+    if (!bpp8Writes.empty())
+    {
+        for (bpp8it = bpp8Writes.begin(); bpp8it != bpp8Writes.end(); bpp8it++) {
+            bool found = false;
+            if (!bpp8Processed.empty())
+                for (bpp8Processedit = bpp8Processed.begin(); bpp8Processedit != bpp8Processed.end(); bpp8Processedit++) {
+                    if (*bpp8it == *bpp8Processedit) {
+                        found = true;
+                    }
+                }
+            if (found == false) {
+
+                //log("VRAM WRITE 8BPP TILE AT : %08x\n", bpp8it);
+
+                uint8_t input_bin[(((8 * enhance_multiplier)) * ((8 * enhance_multiplier)) + 1024)];
+                std::string hex;
+                for (int i = 0; i < (int)(64 * (sizeof(uint32_t))); i++) {
+                    hex += vram[*bpp8it + i];
+                }
+                {
+                    std::string sha = sha256(hex);
+                    std::string res = "vbamx/";
+                    char romname[12UL + 1];
+                    memcpy(romname, &rom[0xa0], 12UL);
+                    romname[12UL] = 0;
+                    for (int c = 0; c < 12; c++) {
+                        if (romname[c] != 0) {
+                            res += romname[c];
+                        }
+                    }
+                    if (option_dumpTiles && dumpScreen) {
+                        mkdir(res.c_str());
+                    }
+                    res += "/";
+                    res += std::to_string(enhance_multiplier);
+                    if (option_dumpTiles && dumpScreen) {
+                        mkdir(res.c_str());
+                    }
+                    res += "/";
+                    vramfile = res;
+                    vramfile += "index.vram";
+
+                    if (option_dumpTiles && dumpScreen) {
+                        mkdir(res.c_str());
+                    }
+                    std::string filename_8bpp = res + sha + ".8bpp";
+                    std::string filename_8bpx = res + sha + ".8bpx";
+                   
+                        FILE* fileread = fopen(filename_8bpp.c_str(), "rb");
+
+                        if (fileread != NULL) {
+                            if (option_loadTiles && loadTiles) {
+                                log("Refreshing Screen Tiles...\n");
+                            int i = 0;
+                            for (int y = 0; y < enhance_multiplier; y++) {
+                                for (int x = 0; x < enhance_multiplier; x++) {
+                                    for (int iy = 0; iy < 8; iy++) {
+                                        for (int ix = 0; ix < 8; ix++) {
+                                            vramx[(y * enhance_multiplier) + x][(iy * 8) + ix + *bpp8it] = fgetc(fileread); //replace_bin[i];
+                                            i++;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    else {
+                        if (option_dumpTiles && dumpScreen && !screenTileStartAddresses.empty()) {
+                            FILE* filex = fopen(filename_8bpx.c_str(), "wb");
+
+                            if (filex != NULL) {
+                                int i = 0;
+                                for (int y = 0; y < enhance_multiplier; y++) {
+                                    for (int x = 0; x < enhance_multiplier; x++) {
+                                        for (int iy = 0; iy < 8; iy++) {
+                                            for (int ix = 0; ix < 8; ix++) {
+                                                input_bin[i] = vramx[(y * enhance_multiplier) + x][(iy * 8) + ix + *bpp8it];
+                                                i++;
+                                            }
+                                        }
+                                    }
+                                }
+
+
+                                for (int p = 0; p < 1024; p++) {
+                                    input_bin[p + i] = paletteRAM[p];
+                                }
+                                fwrite(input_bin, (sizeof(input_bin)), sizeof(uint32_t), filex);
+                                vramdump += sha;
+                                vramdump += ".8bpx";
+                                vramdump += ",";
+                                vramdump += std::to_string((uint32_t)((*bpp8Palettesit)));
+                                vramdump += "\n";
+
+                            }
+                            fclose(filex);
+                        }
+                    }
+
+
+                    bpp8Processed.push_front(*bpp8it);
+                    if (fileread != NULL) {
+                        fclose(fileread);
+                    }
+                }
+
+            }
+            if (option_dumpTiles && dumpScreen) {
+                bpp8Palettesit++;
+            }
+        }
+
+    }
+    if (option_dumpTiles && dumpScreen) {
+        if (!screenTileStartAddresses.empty()) {
+
+           
+            std::cin >> vramdump;
+            std::ofstream out(vramfile, std::ios::app);
+            out << vramdump;
+            out.close();
+        }
+    }
+    dumpScreen = false;
+    screenTileStartAddresses.clear();
+    screenTilePalettes.clear();
+    loadTiles = false;
+    bpp4Processed.clear();
+    bpp8Processed.clear();
+    bpp4Writes.clear();
+    bpp8Writes.clear();
+    bpp4Palettes.clear();
+    bpp8Palettes.clear();
+}
+
+
 void CPULoop(int ticks)
 {
     int clockTicks;
@@ -3737,6 +4092,7 @@ void CPULoop(int ticks)
         if (rtcIsEnabled())
             rtcUpdateTime(cpuTotalTicks);
 
+        
         if (cpuTotalTicks >= cpuNextEvent) {
             int remainingTicks = cpuTotalTicks - cpuNextEvent;
 
@@ -3751,6 +4107,7 @@ void CPULoop(int ticks)
 
         updateLoop:
 
+         
             if (IRQTicks) {
                 IRQTicks -= clockTicks;
                 if (IRQTicks < 0)
@@ -3760,7 +4117,14 @@ void CPULoop(int ticks)
             lcdTicks -= clockTicks;
 
             soundTicks += clockTicks;
-
+            if (!enhancing && VCOUNT == 0)
+            {
+                TileEnhancement();
+                enhancing = true;   
+            }
+            if (VCOUNT == 2) {
+                enhancing = false;   
+            }
             if (lcdTicks <= 0) {
                 if (DISPSTAT & 1) { // V-BLANK
                     // if in V-Blank mode, keep computing...
@@ -3825,6 +4189,7 @@ void CPULoop(int ticks)
                     if (DISPSTAT & 2) {
                         // if in H-Blank, leave it and move to drawing mode
                         VCOUNT++;
+                        
                         UPDATE_REG(0x06, VCOUNT);
 
                         lcdTicks += 1008;
@@ -3846,7 +4211,7 @@ void CPULoop(int ticks)
                                 lastTime = time;
                                 count = 0;
                             }
-
+                            
                             uint32_t ext = (joy >> 10);
                             // If no (m) code is enabled, apply the cheats at each LCDline
                             if ((cheatsEnabled) && (mastercode == 0))
@@ -3881,7 +4246,9 @@ void CPULoop(int ticks)
                             psoundTickfn();
 
                             if (frameCount >= framesToSkip) {
+                                
                                 systemDrawScreen();
+                                
                                 frameCount = 0;
                             } else
                                 frameCount++;
@@ -3899,325 +4266,78 @@ void CPULoop(int ticks)
                             (*renderLine)();
                             switch (systemColorDepth) {
                             case 16: {
-                                while (linePrio[0] == linePrio[1] || linePrio[0] == linePrio[2] || linePrio[0] == linePrio[3] || linePrio[1] == linePrio[2] || linePrio[1] == linePrio[3] || linePrio[2] == linePrio[3]) {
-                                    for (int pp = 0; pp < 4; pp++) {
-                                        for (int p = 0; p < 4; p++) {
-                                            if (p != pp) {
-                                                if (linePrio[p] == linePrio[pp] && p > pp) {
-                                                    linePrio[p]++;
-                                                }
-                                            }
-                                        }
+#ifdef __LIBRETRO__
+                                for (int r = 0; r < enhance_multiplier; r++) {
+
+                                uint16_t* dest = (uint16_t*)pix + ((240 * enhance_multiplier) * ((VCOUNT * enhance_multiplier)+r));
+                            
+                                for (int x = 0; x < 240; x++) {
+                                    for (int l = 0; l < enhance_multiplier; l++) {
+                                        *dest++ = systemColorMap16[lineMix[r][l][x] & 0xFFFF];
                                     }
                                 }
-
-                                // input map
-                                std::map<std::uint32_t*, int> map = {
-                                    {line0, linePrio[0]}, {line1, linePrio[1]}, {line2, linePrio[2]}, {line3, linePrio[3]}
-                                };
-
-                                // create an empty vector of pairs
-                                std::set<std::pair<std::uint32_t*, int>, comp> set(map.begin(), map.end());
-
-                                int count = 0;
-                                uint32_t* lineOrdered[4];
-                                for (auto const& pair : set) {
-                                    linePrio[count] = count;
-                                    lineOrdered[count] = pair.first;
-                                    count++;
-                                }
-                                for (int a = 0; a < 2; a++) {
-                                    for (int rp = 0; rp < 7; rp++) {
-#ifdef __LIBRETRO__
-                                        uint16_t* dest = (uint16_t*)lpix + (240 * rp) + ((240 * 7) * (VCOUNT + (a * 160)));
+                            }
 #else
-                                        uint16_t* dest = (uint16_t*)lpix + (242 * rp) + ((242 * 7) * (VCOUNT + (a * 160) + 1));
-#endif
+                            for (int r = 0; r < enhance_multiplier; r++) {
 
-                                        uint32_t* line = lineMix;
-                                        bool skipRender = false;
-                                        if (rp > 0 && rp < 5) {
-#ifdef __LIBRETRO__
-                                            dest = (uint16_t*)lpix + (240 * (3-linePrio[rp-1]+1)) + ((240 * 7) * (VCOUNT + (a * 160)));
-#else
-                                            dest = (uint16_t*)lpix + (242 * (3-linePrio[rp-1]+1)) + ((242 * 7) * (VCOUNT + (a * 160) + 1));
-#endif                                            
-                                            line = lineOrdered[rp-1];
-                                                uint32_t rpmo = linePrio[rp-1];
-                                                std::string s = std::to_string(rpmo);
-                                                s += "\n";
-                                                log(s.c_str());
-                                            
-                                        }
-
-  
-                                        if (rp == 5) {
-                                            //if (!((layerEnable & 0x9000) == 0x9000))
-                                                skipRender = true;
-                                            line = lineOBJWin;
-                                        }
-                                        else if (rp == 6) {
-                                            //if (!(layerEnable & 0x1000))
-                                                //skipRender = true;                                           
-                                            line = lineOBJ;
-                                        }
-                                        if (a == 0) {
-                                            for (int x = 0; x < 240; x++) {
-                                                if (!skipRender) {
-                                                    if (rp > 0 && rp < 5 && realLinePrio[rp-1] == linePrio[rp-1] + 1) {
-                                                        if (lineOrdered[rp-1][x] != ((customBackdropColor & 0x7FFF) | 0x30000000)) {
-                                                            *dest++ = systemColorMap16[line[x] & 0xFFFF];
-                                                        }
-                                                        else {
-                                                            *dest++;
-
-                                                        }
-                                                    }
-                                                    else {
-                                                        *dest++ = systemColorMap16[line[x] & 0xFFFF];
-                                                    }
-                                                }
-                                                else {
-                                                    line[x] = ((customBackdropColor & 0x7FFF) | 0x30000000);
-                                                }
-                                            }
-                                        }
-                                        else {
-                                            for (int x = 0; x < 240;) {
-                                                if (line[x++] == ((customBackdropColor & 0x7FFF) | 0x30000000)) {
-                                                    *dest++ = systemColorMap16[((0x0000 & 0x7FFF) | 0x30000000) & 0xFFFF];
-                                                }
-                                                else {
-                                                    *dest++ = systemColorMap16[((0x7FFF & 0x7FFF) | 0x30000000) & 0xFFFF];
-                                                }
-
-
-                                            }
-                                        }
-                                        // for filters that read past the screen
-#ifndef __LIBRETRO__
-                                        * dest++ = 0;
-
-#endif
+                                uint16_t* dest = (uint16_t*)pix + ((242 * enhance_multiplier) * ((VCOUNT * enhance_multiplier)+r));
+                            
+                                for (int x = 0; x < 240; x++) {
+                                    for (int l = 0; l < enhance_multiplier; l++) {
+                                        *dest++ = systemColorMap16[lineMix[r][l][x] & 0xFFFF];
                                     }
                                 }
+                            }
+#endif
+// for filters that read past the screen
+
                             } break;
                             case 24: {
-                                while (linePrio[0] == linePrio[1] || linePrio[0] == linePrio[2] || linePrio[0] == linePrio[3] || linePrio[1] == linePrio[2] || linePrio[1] == linePrio[3] || linePrio[2] == linePrio[3]) {
-                                    for (int pp = 0; pp < 4; pp++) {
-                                        for (int p = 0; p < 4; p++) {
-                                            if (p != pp) {
-                                                if (linePrio[p] == linePrio[pp] && pp > p) {
-                                                    linePrio[pp]++;
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
+                                
+                                for (int r = 0; r < enhance_multiplier; r++) {
+                                    uint8_t* dest = (uint8_t*)pix + ((240 * enhance_multiplier) * ((VCOUNT * enhance_multiplier)+r) * 3);
+                                    for (int x = 0; x < 240; x++) {
+                                        for (int l = 0; l < enhance_multiplier; l++) {
+                                            *((uint32_t*)dest) = systemColorMap32[lineMix[r][l][x] & 0xFFFF];
+                                            dest += 3;
 
-                                // input map
-                                std::map<std::uint32_t*, int> map = {
-                                    {line0, linePrio[0]}, {line1, linePrio[1]}, {line2, linePrio[2]}, {line3, linePrio[3]}
-                                };
-
-                                // create an empty vector of pairs
-                                std::set<std::pair<std::uint32_t*, int>, comp> set(map.begin(), map.end());
-
-                                // print the vector
-                                int count = 0;
-                                uint32_t* lineOrdered[4];
-                                for (auto const& pair : set) {
-                                    linePrio[count] = count;
-                                    lineOrdered[count] = pair.first;
-                                    count++;
-                                }
-                                for (int a = 0; a < 2; a++) {
-                                    for (int rp = 0; rp < 7; rp++) {
-                                        uint8_t* dest = (uint8_t*)lpix + (240 * rp) + ((240 * 7) * (VCOUNT + (a * 160))) * 3;
-                                        uint32_t* line = lineMix;
-                                        bool skipRender = false;
-                                        if (rp > 0 && rp < 5) {
-                                                dest = (uint8_t*)lpix + (240 * (3 - linePrio[rp - 1])) + ((240 * 7) * (VCOUNT + (a * 160))) * 3;
-                                                line = lineOrdered[3 - (rp - 1)];
-                                                uint32_t rpmo = 3 - linePrio[rp - 1];
-                                                std::string s = std::to_string(rpmo);
-                                                s += "\n";
-                                                log(s.c_str());
-                                            
-                                        }
-                                        if (rp == 5) {
-                                            //if (!((layerEnable & 0x9000) == 0x9000))
-                                                skipRender = true;
-                                            line = lineOBJWin;
-                                        }
-                                        else if (rp == 6) {
-                                            //if (!(layerEnable & 0x1000))
-                                                //skipRender = true;                                           
-                                            line = lineOBJ;
-                                        }
-                                        if (a == 0) {
-                                            for (int x = 0; x < 240;) {
-                                                if (!skipRender) {
-                                                *((uint32_t*)dest) = systemColorMap32[line[x++] & 0xFFFF];
-                                                dest += 3;
-                                                *((uint32_t*)dest) = systemColorMap32[line[x++] & 0xFFFF];
-                                                dest += 3;
-                                                *((uint32_t*)dest) = systemColorMap32[line[x++] & 0xFFFF];
-                                                dest += 3;
-                                                *((uint32_t*)dest) = systemColorMap32[line[x++] & 0xFFFF];
-                                                dest += 3;
-
-                                                *((uint32_t*)dest) = systemColorMap32[line[x++] & 0xFFFF];
-                                                dest += 3;
-                                                *((uint32_t*)dest) = systemColorMap32[line[x++] & 0xFFFF];
-                                                dest += 3;
-                                                *((uint32_t*)dest) = systemColorMap32[line[x++] & 0xFFFF];
-                                                dest += 3;
-                                                *((uint32_t*)dest) = systemColorMap32[line[x++] & 0xFFFF];
-                                                dest += 3;
-
-                                                *((uint32_t*)dest) = systemColorMap32[line[x++] & 0xFFFF];
-                                                dest += 3;
-                                                *((uint32_t*)dest) = systemColorMap32[line[x++] & 0xFFFF];
-                                                dest += 3;
-                                                *((uint32_t*)dest) = systemColorMap32[line[x++] & 0xFFFF];
-                                                dest += 3;
-                                                *((uint32_t*)dest) = systemColorMap32[line[x++] & 0xFFFF];
-                                                dest += 3;
-
-                                                *((uint32_t*)dest) = systemColorMap32[line[x++] & 0xFFFF];
-                                                dest += 3;
-                                                *((uint32_t*)dest) = systemColorMap32[line[x++] & 0xFFFF];
-                                                dest += 3;
-                                                *((uint32_t*)dest) = systemColorMap32[line[x++] & 0xFFFF];
-                                                dest += 3;
-                                                *((uint32_t*)dest) = systemColorMap32[line[x++] & 0xFFFF];
-                                                dest += 3;
-                                                }
-                                                else {
-                                                    line[x++] = ((customBackdropColor & 0x7FFF) | 0x30000000);
-                                                }
-                                            }
-                                        
-                                        }
-                                        else {
-                                            for (int x = 0; x < 240;) {
-                                                if (line[x++] == ((customBackdropColor & 0x7FFF) | 0x30000000)) {
-                                                    *((uint32_t*)dest) = systemColorMap32[((0x0000 & 0x7FFF) | 0x30000000) & 0xFFFF];
-                                                    dest += 3;
-                                                }
-                                                else {
-                                                    *((uint32_t*)dest) = systemColorMap32[((0x7FFF & 0x7FFF) | 0x30000000) & 0xFFFF];
-                                                    dest += 3;
-                                                }
-                                            }
                                         }
                                     }
                                 }
                             } break;
                             case 32: {
-                                while (linePrio[0] == linePrio[1] || linePrio[0] == linePrio[2] || linePrio[0] == linePrio[3] || linePrio[1] == linePrio[2] || linePrio[1] == linePrio[3] || linePrio[2] == linePrio[3]) {
-                                    for (int pp = 0; pp < 4; pp++) {
-                                        for (int p = 0; p < 4; p++) {
-                                            if (p != pp) {
-                                                if (linePrio[p] == linePrio[pp] && pp > p) {
-                                                    linePrio[pp]++;
-                                            }
-                                        }
+#ifdef __LIBRETRO__
+                                for (int r = 0; r < enhance_multiplier; r++) {
+
+                                uint32_t* dest = (uint32_t*)pix + ((240 * enhance_multiplier) * ((VCOUNT * enhance_multiplier)+r));
+
+                            
+                                for (int x = 0; x < 240; x++) {
+                                    for (int l = 0; l < enhance_multiplier; l++) {
+                                        *dest++ = systemColorMap32[lineMix[r][l][x] & 0xFFFF];
+
                                     }
                                 }
                             }
-
-                                // input map
-                                std::map<std::uint32_t*, int> map = {
-                                    {line0, linePrio[0]}, {line1, linePrio[1]}, {line2, linePrio[2]}, {line3, linePrio[3]}
-                                };
-
-                                // create an empty vector of pairs
-                                std::set<std::pair<std::uint32_t*, int>, comp> set(map.begin(), map.end());
-
-                                int count = 0;
-                                uint32_t* lineOrdered[4];
-                                for (auto const& pair : set) {
-                                    linePrio[count] = count;
-                                    lineOrdered[count] = pair.first;
-                                    count++;
-                                }
-                                for (int a = 0; a < 2; a++) {
-                                    for (int rp = 0; rp < 7; rp++) {
-#ifdef __LIBRETRO__
-                                        uint32_t* dest = (uint32_t*)lpix + (240 * rp) + ((240 * 7) * (VCOUNT + (a * 160)));
 #else
-                                        uint32_t* dest = (uint32_t*)lpix + (240 * rp) + ((241 * 7) * ((VCOUNT + (a * 160)) + 1));
-#endif
-                                        uint32_t* line = lineMix;
-                                        bool skipRender = false;
-                                        if (rp > 0 && rp < 5) {
-#ifdef __LIBRETRO__
-                                            dest = (uint32_t*)lpix + (240 * (3 - linePrio[rp - 1])) + ((240 * 7) * (VCOUNT + (a * 160)));
-#else
-                                            dest = (uint32_t*)lpix + (240 * (3 - linePrio[rp - 1])) + ((241 * 7) * ((VCOUNT + (a * 160)) + 1));
-#endif
-                                                line = lineOrdered[3 - (rp - 1)];
-                                                uint32_t rpmo = 3 - linePrio[rp - 1];
-                                                std::string s = std::to_string(rpmo);
-                                                s += "\n";
-                                                log(s.c_str());
-                                            
-                                        }
-                                        if (rp == 5) {
-                                            //if (!((layerEnable & 0x9000) == 0x9000))
-                                                skipRender = true;
-                                            line = lineOBJWin;
-                                        }
-                                        else if (rp == 6) {
-                                            //if (!(layerEnable & 0x1000))
-                                                //skipRender = true;                                           
-                                            line = lineOBJ;
-                                        }
-                                        if (a == 0) {
-                                            for (int x = 0; x < 240;) {
-                                                if (!skipRender) {
-                                                *dest++ = systemColorMap32[line[x++] & 0xFFFF];
-                                                *dest++ = systemColorMap32[line[x++] & 0xFFFF];
-                                                *dest++ = systemColorMap32[line[x++] & 0xFFFF];
-                                                *dest++ = systemColorMap32[line[x++] & 0xFFFF];
+                            for (int r = 0; r < enhance_multiplier; r++) {
 
-                                                *dest++ = systemColorMap32[line[x++] & 0xFFFF];
-                                                *dest++ = systemColorMap32[line[x++] & 0xFFFF];
-                                                *dest++ = systemColorMap32[line[x++] & 0xFFFF];
-                                                *dest++ = systemColorMap32[line[x++] & 0xFFFF];
 
-                                                *dest++ = systemColorMap32[line[x++] & 0xFFFF];
-                                                *dest++ = systemColorMap32[line[x++] & 0xFFFF];
-                                                *dest++ = systemColorMap32[line[x++] & 0xFFFF];
-                                                *dest++ = systemColorMap32[line[x++] & 0xFFFF];
+                                uint32_t* dest = (uint32_t*)pix + ((241 * enhance_multiplier) * (((VCOUNT + 1) * enhance_multiplier)+r));
 
-                                                *dest++ = systemColorMap32[line[x++] & 0xFFFF];
-                                                *dest++ = systemColorMap32[line[x++] & 0xFFFF];
-                                                *dest++ = systemColorMap32[line[x++] & 0xFFFF];
-                                                *dest++ = systemColorMap32[line[x++] & 0xFFFF];
-                                                }
-                                                else {
-                                                    line[x++] = ((customBackdropColor & 0x7FFF) | 0x30000000);
-                                                }
-                                            }
+                            
+                                for (int x = 0; x < 240; x++) {
+                                    for (int l = 0; l < enhance_multiplier; l++) {
+                                        *dest++ = systemColorMap32[lineMix[r][l][x] & 0xFFFF];
 
-                                        }
-                                        else {
-                                            for (int x = 0; x < 240;) {
-                                                if (line[x++] == ((customBackdropColor & 0x7FFF) | 0x30000000)) {
-                                                    *dest++ = systemColorMap32[((0x0000 & 0x7FFF) | 0x30000000) & 0xFFFF];
-                                                }
-                                                else {
-                                                    *dest++ = systemColorMap32[((0x7FFF & 0x7FFF) | 0x30000000) & 0xFFFF];
-                                                }
-                                            }
-                                        }
+                                    }
                                 }
                             }
-                            }break;
+#endif                            
+                        } break;
+                            
                             }
+                            
                         }
                         // entering H-Blank
                         DISPSTAT |= 2;
@@ -4434,8 +4554,10 @@ void CPULoop(int ticks)
                 else
                     clockTicks = remainingTicks;
                 remainingTicks -= clockTicks;
-                if (remainingTicks < 0)
+                if (remainingTicks < 0) {
                     remainingTicks = 0;
+                    
+                }
                 goto updateLoop;
             }
 
@@ -4446,7 +4568,7 @@ void CPULoop(int ticks)
                 cpuNextEvent = ticks;
 
             // end loop when a frame is done
-            if (ticks <= 0 || cpuBreakLoop || has_frames)
+            if (ticks <= 0 || cpuBreakLoop || has_frames) 
                 break;
         }
     }
@@ -4467,9 +4589,12 @@ void gbaEmulate(int ticks)
     // then the video frames.
     // sanity check:
     // wrapped in loop in case frames has not been written yet
+        
+                    
     do {
         CPULoop(ticks);
     } while (!has_frames);
+    
 }
 
 struct EmulatedSystem GBASystem = {

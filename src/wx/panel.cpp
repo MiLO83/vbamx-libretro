@@ -33,8 +33,8 @@ GameArea::GameArea()
     , rewind_mem(0)
     , num_rewind_states(0)
     , loaded(IMAGE_UNKNOWN)
-    , basic_width(GBAWidth)
-    , basic_height(GBAHeight)
+    , basic_width(GBAWidth * enhance_multiplier)
+    , basic_height(GBAHeight * enhance_multiplier)
     , fullscreen(false)
     , paused(false)
     , pointer_blanked(false)
@@ -278,8 +278,8 @@ void GameArea::LoadGame(const wxString& name)
         }
 
         CPUReset();
-        basic_width = GBAWidth;
-        basic_height = GBAHeight;
+        basic_width = GBAWidth * enhance_multiplier;
+        basic_height = GBAHeight * enhance_multiplier;
         emusys = &GBASystem;
     }
 
@@ -1531,6 +1531,8 @@ public:
 
     ExitCode Entry()
     {
+        width = gbaWidth * enhance_multiplier;
+        height = gbaHeight * enhance_multiplier;
         // This is the band this thread will process
         // threadno == -1 means just do a dummy round on the border line
         int procy = height * threadno / nthreads;
@@ -1720,6 +1722,8 @@ public:
 
 void DrawingPanelBase::DrawArea(uint8_t** data)
 {
+    width = gbaWidth * enhance_multiplier;
+    height = gbaHeight * enhance_multiplier;
     // double-buffer buffer:
     //   if filtering, this is filter output, retained for redraws
     //   if not filtering, we still retain current image for redraws
@@ -2073,6 +2077,8 @@ void BasicDrawingPanel::DrawArea(wxWindowDC& dc)
 
 void BasicDrawingPanel::DrawImage(wxWindowDC& dc, wxImage* im)
 {
+    width = gbaWidth * enhance_multiplier;
+    height = gbaHeight * enhance_multiplier;
     double sx, sy;
     int w, h;
     GetClientSize(&w, &h);

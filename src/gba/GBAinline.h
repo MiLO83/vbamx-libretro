@@ -9,6 +9,7 @@
 #include "Sound.h"
 #include "agbprint.h"
 #include "remote.h"
+#include <algorithm>
 
 extern const uint32_t objTilesAddress[3];
 
@@ -112,6 +113,12 @@ static inline uint32_t CPUReadMemory(uint32_t address)
         if ((addr & 0x18000) == 0x18000)
             addr &= 0x17fff;
         value = READ32LE(((uint32_t*)&vram[addr]));
+        if (!dumpScreen)
+        {
+
+            bpp8Writes.push_front(addr - (addr % 64));
+
+        }
         break;
     }
     case 7:
@@ -263,6 +270,12 @@ static inline uint32_t CPUReadHalfWord(uint32_t address)
         if ((addr & 0x18000) == 0x18000)
             addr &= 0x17fff;
         value = READ16LE(((uint16_t*)&vram[addr]));
+        if (!dumpScreen)
+        {
+
+            bpp4Writes.push_front(addr - (addr % 32));
+
+        }
         break;
     }
     case 7:
@@ -506,6 +519,17 @@ static inline void CPUWriteMemory(uint32_t address, uint32_t value)
 #endif
 
             WRITE32LE(((uint32_t*)&vram[address]), value);
+            for (int r = 0; r < enhance_multiplier; r++) { 
+                for (int l = 0; l < enhance_multiplier; l++) { 
+                    WRITE32LE(((uint32_t*)&vramx[(r*enhance_multiplier)+l][address]), value);
+                }
+            }
+            if (address <= 65536)
+            {
+                //loadTiles = true;
+                bpp8Writes.push_front(address - (address % 64));
+                
+            }
         break;
     case 0x07:
 #ifdef BKPT_SUPPORT
@@ -609,6 +633,19 @@ static inline void CPUWriteHalfWord(uint32_t address, uint16_t value)
         else
 #endif
             WRITE16LE(((uint16_t*)&vram[address]), value);
+            for (int r = 0; r < enhance_multiplier; r++) { 
+                for (int l = 0; l < enhance_multiplier; l++) { 
+                    WRITE16LE(((uint16_t*)&vramx[(r*enhance_multiplier)+l][address]), value);
+                }
+            }
+
+            if (address <= 65536)
+            {
+                
+                bpp4Writes.push_front(address - (address % 32));
+                
+            }
+            
         break;
     case 7:
 #ifdef BKPT_SUPPORT

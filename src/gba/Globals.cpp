@@ -1,5 +1,4 @@
 #include "GBA.h"
-
 #ifdef BKPT_SUPPORT
 int oldreg[18];
 char oldbuffer[10];
@@ -21,16 +20,33 @@ uint32_t stop = 0x08000568;
 // this is an optional hack to change the backdrop/background color:
 // -1: disabled
 // 0x0000 to 0x7FFF: set custom 15 bit color
-int customBackdropColor = 0x641F;
-
+int customBackdropColor = -1;
+std::list<uint32_t> bpp4Writes;
+std::list<uint32_t> bpp8Writes;
+std::list<uint32_t> bpp4Palettes;
+std::list<uint32_t> bpp8Palettes;
+std::list<uint32_t> bpp4Processed;
+std::list<uint32_t> bpp8Processed;
+std::list<uint32_t>::iterator bpp4it;
+std::list<uint32_t>::iterator bpp8it;
+std::list<uint32_t>::iterator bpp4Palettesit;
+std::list<uint32_t>::iterator bpp8Palettesit;
+std::list<uint32_t>::iterator bpp4Processedit;
+std::list<uint32_t>::iterator bpp8Processedit;
+std::list<uint32_t> screenTileStartAddresses;
+std::list<uint32_t>::iterator screenTileStartAddressesit;
+std::list<uint32_t> screenTilePalettes;
+std::list<uint32_t>::iterator screenTilePalettesit;
+std::list<std::string> filedoesnotexist;
+std::list<std::string>::iterator filedoesnotexistit;
 uint8_t* bios = 0;
 uint8_t* rom = 0;
 uint8_t* internalRAM = 0;
 uint8_t* workRAM = 0;
 uint8_t* paletteRAM = 0;
 uint8_t* vram = 0;
-uint8_t* pix[7];
-uint8_t* lpix;
+uint8_t* vramx[16];
+uint8_t* pix = 0;
 uint8_t* oam = 0;
 uint8_t* ioMem = 0;
 
@@ -111,3 +127,17 @@ uint16_t P1 = 0xFFFF;
 uint16_t IE = 0x0000;
 uint16_t IF = 0x0000;
 uint16_t IME = 0x0000;
+
+uint8_t enhance_multiplier = 4;
+uint16_t dumpWait = 0;
+uint16_t dumpIntreval = 90;
+uint16_t loadWait = 550;
+uint16_t loadIntreval = 600;
+bool dumpScreen = false;
+bool loadTiles = true;
+std::string screendump = "";
+std::string screenfile = "";
+std::string vramdump = "";
+std::string vramfile = "";
+bool option_loadTiles = true;
+bool option_dumpTiles = false;

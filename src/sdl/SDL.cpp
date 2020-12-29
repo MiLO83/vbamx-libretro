@@ -1881,8 +1881,13 @@ int main(int argc, char** argv)
         internalRAM = (uint8_t*)calloc(1, 0x8000);
         paletteRAM = (uint8_t*)calloc(1, 0x400);
         vram = (uint8_t*)calloc(1, 0x20000);
+        for (int r = 0; r < enhance_multiplier; r++) {
+            for (int l = 0; l < enhance_multiplier; l++) {
+                vramx[(r*enhance_multiplier)+l] = (uint8_t*)calloc(1, 0x20000);
+            }
+        }
         oam = (uint8_t*)calloc(1, 0x400);
-        pix = (uint8_t*)calloc(1, 4 * 241 * 162);
+        pix = (uint8_t*)calloc(1, 4 * 241 * 162 * enhance_multiplier);
         ioMem = (uint8_t*)calloc(1, 0x400);
 
         emulator = GBASystem;
@@ -2190,6 +2195,7 @@ void systemShowSpeed(int speed)
 
 void systemFrame()
 {
+    
 }
 
 void system10Frames(int rate)

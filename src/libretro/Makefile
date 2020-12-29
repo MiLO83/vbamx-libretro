@@ -1,5 +1,5 @@
 DEBUG=0
-TILED_RENDERING=0
+TILED_RENDERING=1
 STATIC_LINKING=0
 FRONTEND_SUPPORTS_RGB565=1
 NO_LINK=0
@@ -138,11 +138,7 @@ else ifeq ($(platform), osx)
 	endif
 	OSXVER = `sw_vers -productVersion | cut -d. -f 2`
 	OSX_LT_MAVERICKS = `(( $(OSXVER) <= 9)) && echo "YES"`
-ifeq ($(OSX_LT_MAVERICKS),"YES")
 	fpic += -mmacosx-version-min=10.2
-else
-	fpic += -mmacosx-version-min=10.7 -stdlib=libc++
-endif
 	SHARED := -dynamiclib
 	TILED_RENDERING=1
 

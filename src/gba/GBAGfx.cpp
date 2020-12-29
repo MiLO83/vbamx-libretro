@@ -6,17 +6,14 @@ int coeff[32] = {
     0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15,
     16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16
 };
-bool layerEnab[6] = { true, true, true, true, true, true };
-int linePrio[4] = { 0, 1, 2, 3 };
-int realLinePrio[4] = { 0, 1, 2, 3 };
-uint32_t lineNULL[1];
-uint32_t line0[240];
-uint32_t line1[240];
-uint32_t line2[240];
-uint32_t line3[240];
-uint32_t lineOBJ[240];
-uint32_t lineOBJWin[240];
-uint32_t lineMix[240];
+
+uint32_t line0[4][4][240];
+uint32_t line1[4][4][240];
+uint32_t line2[4][4][240];
+uint32_t line3[4][4][240];
+uint32_t lineOBJ[4][4][240];
+uint32_t lineOBJWin[4][4][240];
+uint32_t lineMix[4][4][240];
 bool gfxInWin0[240];
 bool gfxInWin1[240];
 int lineOBJpixleft[128];
@@ -92,10 +89,8 @@ typedef const TileLine (*TileReader)(const uint16_t*, const int, const uint8_t*,
 
 static inline void gfxDrawPixel(uint32_t* dest, const uint8_t color, const uint16_t* palette, const uint32_t prio)
 {
-    *dest = color ? (READ16LE(&palette[color]) | prio) : ((customBackdropColor & 0x7FFF) | 0x30000000);
+    *dest = color ? (READ16LE(&palette[color]) | prio) : 0x80000000;
 }
-
-
 
 inline const TileLine gfxReadTile(const uint16_t* screenSource, const int yyy, const uint8_t* charBase, uint16_t* palette, const uint32_t prio)
 {
@@ -108,7 +103,7 @@ inline const TileLine gfxReadTile(const uint16_t* screenSource, const int yyy, c
     TileLine tileLine;
 
     const uint8_t* tileBase = &charBase[tile.tileNum * 64 + tileY * 8];
-
+    //screenTileStartAddresses.push_front((uint32_t)(tile.tileNum * 64 + tileY * 4));
     if (!tile.hFlip) {
         gfxDrawPixel(&tileLine.pixels[0], tileBase[0], palette, prio);
         gfxDrawPixel(&tileLine.pixels[1], tileBase[1], palette, prio);
@@ -128,7 +123,7 @@ inline const TileLine gfxReadTile(const uint16_t* screenSource, const int yyy, c
         gfxDrawPixel(&tileLine.pixels[6], tileBase[1], palette, prio);
         gfxDrawPixel(&tileLine.pixels[7], tileBase[0], palette, prio);
     }
-
+    
     return tileLine;
 }
 
@@ -144,6 +139,8 @@ inline const TileLine gfxReadTilePal(const uint16_t* screenSource, const int yyy
     TileLine tileLine;
 
     const uint8_th* tileBase = (uint8_th*)&charBase[tile.tileNum * 32 + tileY * 4];
+
+    //screenTileStartAddresses.push_front((uint32_t)(tile.tileNum * 32 + tileY * 4));
 
     if (!tile.hFlip) {
         gfxDrawPixel(&tileLine.pixels[0], tileBase[0].lo, palette, prio);
@@ -180,29 +177,13 @@ static inline void gfxDrawTileClipped(const TileLine& tileLine, uint32_t* line, 
 
 template <TileReader readTile>
 static void gfxDrawTextScreen(uint16_t control, uint16_t hofs, uint16_t vofs,
-    uint32_t* line)
+    uint32_t* line, int r, int l)
 {
+    int fl =  l;
+    int fr = r;
     uint16_t* palette = (uint16_t*)paletteRAM;
-    uint8_t* charBase = &vram[((control >> 2) & 0x03) * 0x4000];
-    uint16_t* screenBase = (uint16_t*)&vram[((control >> 8) & 0x1f) * 0x800];
+    uint16_t* screenBase = (uint16_t*)&vramx[(r * enhance_multiplier) + l][((control >> 8) & 0x1f) * 0x800];
     uint32_t prio = ((control & 3) << 25) + 0x1000000;
-    
-    if (line == line0) {
-        
-        linePrio[0] = (((1 << 2) - 1) & (control >> (1 - 1)));
-    }
-    if (line == line1) {
-        
-        linePrio[1] = (((1 << 2) - 1) & (control >> (1 - 1)));
-    }
-    if (line == line2) {
-        
-        linePrio[2] = (((1 << 2) - 1) & (control >> (1 - 1)));
-    }
-    if (line == line3) {
-       
-        linePrio[3] = (((1 << 2) - 1) & (control >> (1 - 1)));
-    }
     int sizeX = 256;
     int sizeY = 256;
     switch ((control >> 14) & 3) {
@@ -247,12 +228,28 @@ static void gfxDrawTextScreen(uint16_t control, uint16_t hofs, uint16_t vofs,
     int yshift = ((yyy >> 3) << 5);
 
     uint16_t* screenSource = screenBase + 0x400 * (xxx >> 8) + ((xxx & 255) >> 3) + yshift;
+    TileEntry tile;
+    tile.val = READ16LE(screenSource);
+    uint8_t* charBase = &vramx[(r * enhance_multiplier) + l][((control >> 2) & 0x03) * 0x4000];
+    fl = l;
+    fr = r;
+    if (tile.hFlip) {
+
+        fl = enhance_multiplier - 1 - l;
+        charBase = &vramx[(fr * enhance_multiplier) + fl][((control >> 2) & 0x03) * 0x4000];
+    }
+    if (tile.vFlip) {
+        fr = enhance_multiplier - 1 - r;
+        charBase = &vramx[(fr * enhance_multiplier) + fl][((control >> 2) & 0x03) * 0x4000];
+    }
+
     int x = 0;
     const int firstTileX = xxx & 7;
 
     // First tile, if clipped
     if (firstTileX) {
         gfxDrawTileClipped(readTile(screenSource, yyy, charBase, palette, prio), &line[x], firstTileX, 8 - firstTileX);
+
         screenSource++;
         x += 8 - firstTileX;
         xxx += 8 - firstTileX;
@@ -263,11 +260,73 @@ static void gfxDrawTextScreen(uint16_t control, uint16_t hofs, uint16_t vofs,
             xxx = 0;
             screenSource = screenBase + yshift;
         }
-    }
+        //if (dumpScreen) 
+        {
+            if ((x % 8 == 0) || (VCOUNT % 8 == 0)) 
+            {
+                if (l == 0 && r == 0) {
 
+                    //line[x] = paletteRAM[8];
+                    if (control & 0x80) {
+                        screenTileStartAddresses.push_back((((control >> 2) & 0x03) * 0x4000) + (tile.tileNum * 64));
+                        screenTilePalettes.push_back(256);
+                    }
+                    else {
+                        screenTileStartAddresses.push_back((((control >> 2) & 0x03) * 0x4000) + (tile.tileNum * 32));
+                        screenTilePalettes.push_back(tile.palette);
+                    }
+                    
+                }
+            }
+        }
+    }
+    
     // Middle tiles, full
     while (x < 240 - firstTileX) {
+        TileEntry tile;
+        tile.val = READ16LE(screenSource);
+        uint8_t* charBase = &vramx[(r * enhance_multiplier) + l][((control >> 2) & 0x03) * 0x4000];
+
+        fl = l;
+        fr = r;
+
+        if (tile.vFlip && tile.hFlip) {
+            fl = enhance_multiplier - 1 - l;
+            fr = enhance_multiplier - 1 - r;
+
+            charBase = &vramx[(fr * enhance_multiplier) + fl][((control >> 2) & 0x03) * 0x4000];
+
+        }
+        else if (tile.hFlip) {
+
+            fl = enhance_multiplier - 1 - l;
+            charBase = &vramx[(r * enhance_multiplier) + fl][((control >> 2) & 0x03) * 0x4000];
+        }
+        else if (tile.vFlip) {
+            fr = enhance_multiplier - 1 - r;
+            charBase = &vramx[(fr * enhance_multiplier) + l][((control >> 2) & 0x03) * 0x4000];
+        }
+       
         gfxDrawTile(readTile(screenSource, yyy, charBase, palette, prio), &line[x]);
+        //if (dumpScreen) 
+        {
+            if ((x % 8 == 0) || (VCOUNT % 8 == 0)) {
+                if (l == 0 && r == 0) {
+                    
+                    //line[x] = paletteRAM[8];
+                    if (control & 0x80) {
+                    screenTileStartAddresses.push_back((((control >> 2) & 0x03) * 0x4000) + (tile.tileNum * 64));
+                    screenTilePalettes.push_back(256);
+                    } else {
+                    screenTileStartAddresses.push_back((((control >> 2) & 0x03) * 0x4000) + (tile.tileNum * 32));
+                    screenTilePalettes.push_back(tile.palette);
+                    }
+                    
+                }
+            }
+        }
+        
+        
         screenSource++;
         xxx += 8;
         x += 8;
@@ -283,6 +342,24 @@ static void gfxDrawTextScreen(uint16_t control, uint16_t hofs, uint16_t vofs,
     // Last tile, if clipped
     if (firstTileX) {
         gfxDrawTileClipped(readTile(screenSource, yyy, charBase, palette, prio), &line[x], 0, firstTileX);
+        //if (dumpScreen) 
+        {
+            if ((x % 8 == 0) || (VCOUNT % 8 == 0)) {
+                if (l == 0 && r == 0) {
+
+                    //line[x] = paletteRAM[8];
+                    if (control & 0x80) {
+                        screenTileStartAddresses.push_back((((control >> 2) & 0x03) * 0x4000) + (tile.tileNum * 64));
+                        screenTilePalettes.push_back(256);
+                    }
+                    else {
+                        screenTileStartAddresses.push_back((((control >> 2) & 0x03) * 0x4000) + (tile.tileNum * 32));
+                        screenTilePalettes.push_back(tile.palette);
+                    }
+                    
+                }
+            }
+        }
     }
 
     if (mosaicOn) {
@@ -300,11 +377,11 @@ static void gfxDrawTextScreen(uint16_t control, uint16_t hofs, uint16_t vofs,
     }
 }
 
-void gfxDrawTextScreen(uint16_t control, uint16_t hofs, uint16_t vofs, uint32_t* line)
+void gfxDrawTextScreen(uint16_t control, uint16_t hofs, uint16_t vofs, uint32_t* line, int r, int l)
 {
     if (control & 0x80) // 1 pal / 256 col
-        gfxDrawTextScreen<gfxReadTile>(control, hofs, vofs, line);
+        gfxDrawTextScreen<gfxReadTile>(control, hofs, vofs, line, r, l);
     else // 16 pal / 16 col
-        gfxDrawTextScreen<gfxReadTilePal>(control, hofs, vofs, line);
+        gfxDrawTextScreen<gfxReadTilePal>(control, hofs, vofs, line, r, l);
 }
 #endif // TILED_RENDERING

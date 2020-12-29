@@ -23,4 +23,5 @@ LOCAL_MODULE    := retro
 LOCAL_SRC_FILES := $(SOURCES_CXX) 
 LOCAL_CXXFLAGS  := $(COREFLAGS)
 LOCAL_LDFLAGS   := -Wl,-version-script=$(LIBRETRO_DIR)/link.T
+LOCAL_LDLIBS := -latomic
 include $(BUILD_SHARED_LIBRARY)

@@ -4,7 +4,7 @@
 #include "../common/Types.h"
 #include "../System.h"
 #include "../Util.h"
-
+#include <thread>
 const uint64_t TICKS_PER_SECOND = 16777216;
 
 #define SAVE_GAME_VERSION_1 1
@@ -49,9 +49,9 @@ enum {
     SIZE_OAM   = 0x0000400,
     SIZE_IOMEM = 0x0000400,
 #ifndef __LIBRETRO__
-    SIZE_PIX   = (4 * 241 * 162)
+    SIZE_PIX   = (4 * (241 * 4) * (162 * 4))
 #else
-    SIZE_PIX   = (4 * 240 * 160)
+    SIZE_PIX   = (4 * (240 * 4) * (160 * 4))
 #endif
 };
 
@@ -120,7 +120,9 @@ extern int oldreg[18];
 extern char oldbuffer[10];
 extern bool debugger;
 #endif
-
+extern bool option_loadTiles;
+extern bool option_dumpTiles;
+extern void TileEnhancement();
 extern bool CPUReadGSASnapshot(const char*);
 extern bool CPUReadGSASPSnapshot(const char*);
 extern bool CPUWriteGSASnapshot(const char*, const char*, const char*, const char*);
@@ -154,6 +156,7 @@ extern void CPULoop(int);
 extern void CPUCheckDMA(int, int);
 extern bool CPUIsGBAImage(const char*);
 extern bool CPUIsZipFile(const char*);
+
 #ifdef PROFILING
 #include "prof/prof.h"
 extern void cpuProfil(profile_segment* seg);
@@ -194,5 +197,7 @@ extern struct EmulatedSystem GBASystem;
 #include "EEprom.h"
 #include "Flash.h"
 #include "Globals.h"
-
+#include <iostream>
+#include <fstream>
+#include <stdio.h>
 #endif // GBA_H

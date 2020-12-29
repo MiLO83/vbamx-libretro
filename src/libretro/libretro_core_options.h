@@ -49,7 +49,41 @@ extern "C" {
  *   frontend language definition */
 
 struct retro_core_option_definition option_defs_us[] = {
+        
     {
+        "vbam_usebios",
+        "Use Official BIOS (If Available)",
+        "Use official BIOS when available. Core needs to be restarted for changes to apply.",
+        {
+            { "disabled",  NULL },
+            { "enabled",   NULL },
+            { NULL, NULL },
+        },
+        "disabled"
+    },
+    {
+        "vbam_loadtiles",
+        "Load Tiles",
+        "Enable / Disable loading enhanced tiles.",
+        {
+            { "disabled",  NULL },
+            { "enabled",   NULL },            
+            { NULL, NULL },
+        },
+        "enabled"
+    },
+    {
+        "vbam_dumptiles",
+        "Dump Tiles",
+        "Enable / Disable dumping screen tiles when you save a savestate.",
+        {
+            { "disabled",  NULL },
+            { "enabled",   NULL },
+            { NULL, NULL },
+        },
+        "disabled"
+    },
+        {
         "vbam_solarsensor",
         "Solar Sensor Level",
         "Adjusts simulated solar level in Boktai games. L2/R2 buttons can also be used to quickly change levels.",
@@ -68,17 +102,6 @@ struct retro_core_option_definition option_defs_us[] = {
             { NULL, NULL },
         },
         "0"
-    },
-    {
-        "vbam_usebios",
-        "Use Official BIOS (If Available)",
-        "Use official BIOS when available. Core needs to be restarted for changes to apply.",
-        {
-            { "disabled",  NULL },
-            { "enabled",   NULL },
-            { NULL, NULL },
-        },
-        "disabled"
     },
     {
         "vbam_forceRTCenable",

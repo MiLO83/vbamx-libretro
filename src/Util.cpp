@@ -291,7 +291,7 @@ bool utilWritePNGFile(const char *fileName, int w, int h, uint8_t *pix)
         png_destroy_write_struct(&png_ptr, &info_ptr);
 
         fclose(fp);
-
+        dumpScreen = true;
         return true;
 #else
         return false;

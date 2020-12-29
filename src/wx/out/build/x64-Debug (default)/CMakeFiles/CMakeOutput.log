@@ -21,7 +21,7 @@ Compilation of the C compiler identification source "CMakeCCompilerId.c" produce
 
 Compilation of the C compiler identification source "CMakeCCompilerId.c" produced "CMakeCCompilerId.obj"
 
-The C compiler identification is MSVC, found in "C:/msys64/home/MiLO/vbam-libretro/src/wx/out/build/x64-Debug (default)/CMakeFiles/3.18.20081302-MSVC_2/CompilerIdC/CMakeCCompilerId.exe"
+The C compiler identification is MSVC, found in "C:/msys64/home/MiLO/VBAmX/libretro-vbam/src/wx/out/build/x64-Debug (default)/CMakeFiles/3.18.20081302-MSVC_2/CompilerIdC/CMakeCCompilerId.exe"
 
 Compiling the CXX compiler identification source file "CMakeCXXCompilerId.cpp" succeeded.
 Compiler: C:/Program Files (x86)/Microsoft Visual Studio/2019/Community/VC/Tools/MSVC/14.28.29333/bin/Hostx64/x64/cl.exe 
@@ -45,21 +45,21 @@ Compilation of the CXX compiler identification source "CMakeCXXCompilerId.cpp" p
 
 Compilation of the CXX compiler identification source "CMakeCXXCompilerId.cpp" produced "CMakeCXXCompilerId.obj"
 
-The CXX compiler identification is MSVC, found in "C:/msys64/home/MiLO/vbam-libretro/src/wx/out/build/x64-Debug (default)/CMakeFiles/3.18.20081302-MSVC_2/CompilerIdCXX/CMakeCXXCompilerId.exe"
+The CXX compiler identification is MSVC, found in "C:/msys64/home/MiLO/VBAmX/libretro-vbam/src/wx/out/build/x64-Debug (default)/CMakeFiles/3.18.20081302-MSVC_2/CompilerIdCXX/CMakeCXXCompilerId.exe"
 
 Detecting C compiler ABI info compiled with the following output:
-Change Dir: C:/msys64/home/MiLO/vbam-libretro/src/wx/out/build/x64-Debug (default)/CMakeFiles/CMakeTmp
+Change Dir: C:/msys64/home/MiLO/VBAmX/libretro-vbam/src/wx/out/build/x64-Debug (default)/CMakeFiles/CMakeTmp
 
-Run Build Command(s):C:/Program Files (x86)/Microsoft Visual Studio/2019/Community/Common7/IDE/CommonExtensions/Microsoft/CMake/Ninja/ninja.exe cmTC_22554 && [1/2] Building C object CMakeFiles\cmTC_22554.dir\CMakeCCompilerABI.c.obj
-[2/2] Linking C executable cmTC_22554.exe
+Run Build Command(s):C:/Program Files (x86)/Microsoft Visual Studio/2019/Community/Common7/IDE/CommonExtensions/Microsoft/CMake/Ninja/ninja.exe cmTC_16361 && [1/2] Building C object CMakeFiles\cmTC_16361.dir\CMakeCCompilerABI.c.obj
+[2/2] Linking C executable cmTC_16361.exe
 
 
 
 Detecting CXX compiler ABI info compiled with the following output:
-Change Dir: C:/msys64/home/MiLO/vbam-libretro/src/wx/out/build/x64-Debug (default)/CMakeFiles/CMakeTmp
+Change Dir: C:/msys64/home/MiLO/VBAmX/libretro-vbam/src/wx/out/build/x64-Debug (default)/CMakeFiles/CMakeTmp
 
-Run Build Command(s):C:/Program Files (x86)/Microsoft Visual Studio/2019/Community/Common7/IDE/CommonExtensions/Microsoft/CMake/Ninja/ninja.exe cmTC_cbe1c && [1/2] Building CXX object CMakeFiles\cmTC_cbe1c.dir\CMakeCXXCompilerABI.cpp.obj
-[2/2] Linking CXX executable cmTC_cbe1c.exe
+Run Build Command(s):C:/Program Files (x86)/Microsoft Visual Studio/2019/Community/Common7/IDE/CommonExtensions/Microsoft/CMake/Ninja/ninja.exe cmTC_e9ed6 && [1/2] Building CXX object CMakeFiles\cmTC_e9ed6.dir\CMakeCXXCompilerABI.cpp.obj
+[2/2] Linking CXX executable cmTC_e9ed6.exe
 
 
 

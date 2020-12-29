@@ -9,18 +9,18 @@
 //#define SPRITE_DEBUG
 
 #ifdef TILED_RENDERING
-extern void gfxDrawTextScreen(uint16_t, uint16_t, uint16_t, uint32_t*);
+extern void gfxDrawTextScreen(uint16_t, uint16_t, uint16_t, uint32_t*, int, int);
 #else
-static void gfxDrawTextScreen(uint16_t, uint16_t, uint16_t, uint32_t*);
+static void gfxDrawTextScreen(uint16_t, uint16_t, uint16_t, uint32_t*, int, int);
 #endif
-static void gfxDrawRotScreen(uint16_t, uint16_t, uint16_t, uint16_t, uint16_t, uint16_t, uint16_t, uint16_t, uint16_t, int&, int&, int, uint32_t*);
+static void gfxDrawRotScreen(uint16_t, uint16_t, uint16_t, uint16_t, uint16_t, uint16_t, uint16_t, uint16_t, uint16_t, int&, int&, int, uint32_t*, int, int);
 static void gfxDrawRotScreen16Bit(uint16_t, uint16_t, uint16_t, uint16_t, uint16_t, uint16_t, uint16_t, uint16_t, uint16_t, int&, int&, int,
-    uint32_t*);
+    uint32_t*, int, int);
 static void gfxDrawRotScreen256(uint16_t, uint16_t, uint16_t, uint16_t, uint16_t, uint16_t, uint16_t, uint16_t, uint16_t, int&, int&, int,
-    uint32_t*);
+    uint32_t*, int, int);
 static void gfxDrawRotScreen16Bit160(uint16_t, uint16_t, uint16_t, uint16_t, uint16_t, uint16_t, uint16_t, uint16_t, uint16_t, int&, int&, int,
-    uint32_t*);
-static void gfxDrawSprites(uint32_t*);
+    uint32_t*, int, int);
+static void gfxDrawSprites(uint32_t*, int, int);
 static void gfxIncreaseBrightness(uint32_t* line, int coeff);
 static void gfxDecreaseBrightness(uint32_t* line, int coeff);
 static void gfxAlphaBlend(uint32_t* ta, uint32_t* tb, int ca, int cb);
@@ -50,16 +50,13 @@ void mode5RenderLineNoWindow();
 void mode5RenderLineAll();
 
 extern int coeff[32];
-extern bool layerEnab[6];
-extern int linePrio[4];
-extern int realLinePrio[4];
-extern uint32_t line0[240];
-extern uint32_t line1[240];
-extern uint32_t line2[240];
-extern uint32_t line3[240];
-extern uint32_t lineOBJ[240];
-extern uint32_t lineOBJWin[240];
-extern uint32_t lineMix[240];
+extern uint32_t line0[4][4][240];
+extern uint32_t line1[4][4][240];
+extern uint32_t line2[4][4][240];
+extern uint32_t line3[4][4][240];
+extern uint32_t lineOBJ[4][4][240];
+extern uint32_t lineOBJWin[4][4][240];
+extern uint32_t lineMix[4][4][240];
 extern bool gfxInWin0[240];
 extern bool gfxInWin1[240];
 extern int lineOBJpixleft[128];
@@ -80,36 +77,13 @@ static inline void gfxClearArray(uint32_t* array)
     }
 }
 
-
-
 #ifndef TILED_RENDERING
-static inline void gfxDrawTextScreen(uint16_t control, uint16_t hofs, uint16_t vofs, uint32_t* line)
+static inline void gfxDrawTextScreen(uint16_t control, uint16_t hofs, uint16_t vofs, uint32_t* line, int r, int l)
 {
     uint16_t* palette = (uint16_t*)paletteRAM;
-    uint8_t* charBase = &vram[((control >> 2) & 0x03) * 0x4000];
-    uint16_t* screenBase = (uint16_t*)&vram[((control >> 8) & 0x1f) * 0x800];
+    uint8_t* charBase = &vramx[(r*enhance_multiplier)+l][((control >> 2) & 0x03) * 0x4000];
+    uint16_t* screenBase = (uint16_t*)&vramx[(r * enhance_multiplier) + l][((control >> 8) & 0x1f) * 0x800];
     uint32_t prio = ((control & 3) << 25) + 0x1000000;
-   
-    if (line == line0) {
-        
-        linePrio[0] = (((1 << 2) - 1) & (control >> (1 - 1)));
-        realLinePrio[0] = (((1 << 2) - 1) & (control >> (1 - 1)));
-    }
-    if (line == line1) {
-        
-        linePrio[1] = (((1 << 2) - 1) & (control >> (1 - 1)));
-        realLinePrio[1] = (((1 << 2) - 1) & (control >> (1 - 1)));
-    }
-    if (line == line2) {
-        
-        linePrio[2] = (((1 << 2) - 1) & (control >> (1 - 1)));
-        realLinePrio[2] = (((1 << 2) - 1) & (control >> (1 - 1)));
-    }
-    if (line == line3) {
-        
-        linePrio[3] = (((1 << 2) - 1) & (control >> (1 - 1)));
-        realLinePrio[3] = (((1 << 2) - 1) & (control >> (1 - 1)));
-    }
     int sizeX = 256;
     int sizeY = 256;
     switch ((control >> 14) & 3) {
@@ -158,6 +132,15 @@ static inline void gfxDrawTextScreen(uint16_t control, uint16_t hofs, uint16_t v
             uint16_t data = READ16LE(screenSource);
 
             int tile = data & 0x3FF;
+           //if (dumpScreen)
+               if ((x % 8 == 0) && (VCOUNT % 8 == 0)) 
+               {
+                    if (l == 1 && r == 1) {
+                        //line[x] = paletteRAM[8];
+                        screenTileStartAddresses.push_back((((control >> 2) & 0x03) * 0x4000) + (tile * 64));
+                        screenTilePalettes.push_back(256);
+                    }
+                }
             int tileX = (xxx & 7);
             int tileY = yyy & 7;
 
@@ -171,7 +154,7 @@ static inline void gfxDrawTextScreen(uint16_t control, uint16_t hofs, uint16_t v
 
             uint8_t color = charBase[tile * 64 + tileY * 8 + tileX];
 
-            line[x] = color ? (READ16LE(&palette[color]) | prio) : ((customBackdropColor & 0x7FFF) | 0x30000000);
+            line[x] = color ? (READ16LE(&palette[color]) | prio) : 0x80000000;
 
             xxx++;
             if (xxx == 256) {
@@ -185,6 +168,7 @@ static inline void gfxDrawTextScreen(uint16_t control, uint16_t hofs, uint16_t v
                 xxx = 0;
                 screenSource = screenBase + yshift;
             }
+         
         }
     } else {
         uint16_t* screenSource = screenBase + 0x400 * (xxx >> 8) + ((xxx & 255) >> 3) + yshift;
@@ -192,6 +176,7 @@ static inline void gfxDrawTextScreen(uint16_t control, uint16_t hofs, uint16_t v
             uint16_t data = READ16LE(screenSource);
 
             int tile = data & 0x3FF;
+            
             int tileX = (xxx & 7);
             int tileY = yyy & 7;
 
@@ -212,8 +197,18 @@ static inline void gfxDrawTextScreen(uint16_t control, uint16_t hofs, uint16_t v
             }
 
             int pal = (data >> 8) & 0xF0;
-            line[x] = color ? (READ16LE(&palette[pal + color]) | prio) : ((customBackdropColor & 0x7FFF) | 0x30000000);
-
+            line[x] = color ? (READ16LE(&palette[pal + color]) | prio) : 0x80000000;
+            //if (dumpScreen) 
+            {
+              if ((x % 8 == 0) && (VCOUNT % 8 == 0)) 
+               {
+                    if (l == 1 && r == 1) {
+                        //line[x] = paletteRAM[8];
+                        screenTileStartAddresses.push_back([(((control >> 2) & 0x03) * 0x4000) + (tile << 5));
+                        screenTilePalettes.push_back(pal);
+                    }
+                }
+            }
             xxx++;
             if (xxx == 256) {
                 if (sizeX > 256)
@@ -228,6 +223,7 @@ static inline void gfxDrawTextScreen(uint16_t control, uint16_t hofs, uint16_t v
             }
         }
     }
+
     if (mosaicOn) {
         if (mosaicX > 1) {
             int m = 1;
@@ -246,32 +242,12 @@ static inline void gfxDrawTextScreen(uint16_t control, uint16_t hofs, uint16_t v
 
 static inline void gfxDrawRotScreen(uint16_t control, uint16_t x_l, uint16_t x_h, uint16_t y_l, uint16_t y_h, uint16_t pa, uint16_t pb,
     uint16_t pc, uint16_t pd, int& currentX, int& currentY, int changed,
-    uint32_t* line)
+    uint32_t* line, int r, int l)
 {
     uint16_t* palette = (uint16_t*)paletteRAM;
-    uint8_t* charBase = &vram[((control >> 2) & 0x03) * 0x4000];
-    uint8_t* screenBase = (uint8_t*)&vram[((control >> 8) & 0x1f) * 0x800];
-    uint32_t prio = ((control & 3) << 25) + 0x1000000;
-    if (line == line0) {
-
-        linePrio[0] = (((1 << 2) - 1) & (control >> (1 - 1)));
-        realLinePrio[0] = (((1 << 2) - 1) & (control >> (1 - 1)));
-    }
-    if (line == line1) {
-
-        linePrio[1] = (((1 << 2) - 1) & (control >> (1 - 1)));
-        realLinePrio[1] = (((1 << 2) - 1) & (control >> (1 - 1)));
-    }
-    if (line == line2) {
-
-        linePrio[2] = (((1 << 2) - 1) & (control >> (1 - 1)));
-        realLinePrio[2] = (((1 << 2) - 1) & (control >> (1 - 1)));
-    }
-    if (line == line3) {
-
-        linePrio[3] = (((1 << 2) - 1) & (control >> (1 - 1)));
-        realLinePrio[3] = (((1 << 2) - 1) & (control >> (1 - 1)));
-    }
+    uint8_t* charBase = &vramx[(r*enhance_multiplier)+l][((control >> 2) & 0x03) * 0x4000];
+    uint8_t* screenBase = (uint8_t*)&vramx[(r * enhance_multiplier) + l][((control >> 8) & 0x1f) * 0x800];
+    int prio = ((control & 3) << 25) + 0x1000000;
     int sizeX = 128;
     int sizeY = 128;
     switch ((control >> 14) & 3) {
@@ -341,13 +317,23 @@ static inline void gfxDrawRotScreen(uint16_t control, uint16_t x_l, uint16_t x_h
             int yyy = (realY >> 8) & maskY;
 
             int tile = screenBase[(xxx >> 3) + ((yyy >> 3) << yshift)];
-
+            //if (dumpScreen)
+            {
+               if ((x % 8 == 0) && (VCOUNT % 8 == 0)) 
+               {
+                    if (l == 1 && r == 1) {
+                        //line[x] = paletteRAM[8];
+                        screenTileStartAddresses.push_back((((control >> 2) & 0x03) * 0x4000) + (tile << 6));
+                        screenTilePalettes.push_back(256);
+                    }
+                }
+            }
             int tileX = (xxx & 7);
             int tileY = yyy & 7;
 
             uint8_t color = charBase[(tile << 6) + (tileY << 3) + tileX];
 
-            line[x] = color ? (READ16LE(&palette[color]) | prio) : ((customBackdropColor & 0x7FFF) | 0x30000000);
+            line[x] = color ? (READ16LE(&palette[color]) | prio) : 0x80000000;
 
             realX += dx;
             realY += dy;
@@ -361,13 +347,23 @@ static inline void gfxDrawRotScreen(uint16_t control, uint16_t x_l, uint16_t x_h
                 line[x] = 0x80000000;
             } else {
                 int tile = screenBase[(xxx >> 3) + ((yyy >> 3) << yshift)];
-
+                //if (dumpScreen) 
+                {
+                    if ((x % 8 == 0) && (VCOUNT % 8 == 0)) 
+                    {
+                        if (l == 1 && r == 1) {
+                            //line[x] = paletteRAM[8];
+                            screenTileStartAddresses.push_back((((control >> 2) & 0x03) * 0x4000) + (tile << 6));
+                            screenTilePalettes.push_back(256);
+                        }
+                    }
+                }
                 int tileX = (xxx & 7);
                 int tileY = yyy & 7;
 
                 uint8_t color = charBase[(tile << 6) + (tileY << 3) + tileX];
 
-                line[x] = color ? (READ16LE(&palette[color]) | prio) : ((customBackdropColor & 0x7FFF) | 0x30000000);
+                line[x] = color ? (READ16LE(&palette[color]) | prio) : 0x80000000;
             }
             realX += dx;
             realY += dy;
@@ -392,32 +388,10 @@ static inline void gfxDrawRotScreen(uint16_t control, uint16_t x_l, uint16_t x_h
 
 static inline void gfxDrawRotScreen16Bit(uint16_t control, uint16_t x_l, uint16_t x_h, uint16_t y_l, uint16_t y_h, uint16_t pa,
     uint16_t pb, uint16_t pc, uint16_t pd, int& currentX, int& currentY,
-    int changed, uint32_t* line)
+    int changed, uint32_t* line, int r, int l)
 {
-    uint16_t* screenBase = (uint16_t*)&vram[0];
-    uint32_t prio = ((control & 3) << 25) + 0x1000000;
-
-    if (line == line0) {
-
-        linePrio[0] = (((1 << 2) - 1) & (control >> (1 - 1)));
-        realLinePrio[0] = (((1 << 2) - 1) & (control >> (1 - 1)));
-    }
-    if (line == line1) {
-
-        linePrio[1] = (((1 << 2) - 1) & (control >> (1 - 1)));
-        realLinePrio[1] = (((1 << 2) - 1) & (control >> (1 - 1)));
-    }
-    if (line == line2) {
-
-        linePrio[2] = (((1 << 2) - 1) & (control >> (1 - 1)));
-        realLinePrio[2] = (((1 << 2) - 1) & (control >> (1 - 1)));
-    }
-    if (line == line3) {
-
-        linePrio[3] = (((1 << 2) - 1) & (control >> (1 - 1)));
-        realLinePrio[3] = (((1 << 2) - 1) & (control >> (1 - 1)));
-    }
-
+    uint16_t* screenBase = (uint16_t*)&vramx[(r * enhance_multiplier) + l][0];
+    int prio = ((control & 3) << 25) + 0x1000000;
     int sizeX = 240;
     int sizeY = 160;
 
@@ -478,6 +452,7 @@ static inline void gfxDrawRotScreen16Bit(uint16_t control, uint16_t x_l, uint16_
         } else {
             line[x] = (READ16LE(&screenBase[yyy * sizeX + xxx]) | prio);
         }
+
         realX += dx;
         realY += dy;
 
@@ -503,33 +478,11 @@ static inline void gfxDrawRotScreen16Bit(uint16_t control, uint16_t x_l, uint16_
 
 static inline void gfxDrawRotScreen256(uint16_t control, uint16_t x_l, uint16_t x_h, uint16_t y_l, uint16_t y_h, uint16_t pa,
     uint16_t pb, uint16_t pc, uint16_t pd, int& currentX, int& currentY,
-    int changed, uint32_t* line)
+    int changed, uint32_t* line, int r, int l)
 {
     uint16_t* palette = (uint16_t*)paletteRAM;
-    uint8_t* screenBase = (DISPCNT & 0x0010) ? &vram[0xA000] : &vram[0x0000];
-    uint32_t prio = ((control & 3) << 25) + 0x1000000;
-
-    if (line == line0) {
-
-        linePrio[0] = (((1 << 2) - 1) & (control >> (1 - 1)));
-        realLinePrio[0] = (((1 << 2) - 1) & (control >> (1 - 1)));
-    }
-    if (line == line1) {
-
-        linePrio[1] = (((1 << 2) - 1) & (control >> (1 - 1)));
-        realLinePrio[1] = (((1 << 2) - 1) & (control >> (1 - 1)));
-    }
-    if (line == line2) {
-
-        linePrio[2] = (((1 << 2) - 1) & (control >> (1 - 1)));
-        realLinePrio[2] = (((1 << 2) - 1) & (control >> (1 - 1)));
-    }
-    if (line == line3) {
-
-        linePrio[3] = (((1 << 2) - 1) & (control >> (1 - 1)));
-        realLinePrio[3] = (((1 << 2) - 1) & (control >> (1 - 1)));
-    }
-
+    uint8_t* screenBase = (DISPCNT & 0x0010) ? &vramx[(r * enhance_multiplier) + l][0xA000] : &vramx[(r * enhance_multiplier) + l][0x0000];
+    int prio = ((control & 3) << 25) + 0x1000000;
     int sizeX = 240;
     int sizeY = 160;
 
@@ -591,8 +544,10 @@ static inline void gfxDrawRotScreen256(uint16_t control, uint16_t x_l, uint16_t 
         } else {
             uint8_t color = screenBase[yyy * 240 + xxx];
 
-            line[x] = color ? (READ16LE(&palette[color]) | prio) : ((customBackdropColor & 0x7FFF) | 0x30000000);
-        }
+            line[x] = color ? (READ16LE(&palette[color]) | prio) : 0x80000000;
+        }   
+        
+        
         realX += dx;
         realY += dy;
 
@@ -618,32 +573,10 @@ static inline void gfxDrawRotScreen256(uint16_t control, uint16_t x_l, uint16_t 
 
 static inline void gfxDrawRotScreen16Bit160(uint16_t control, uint16_t x_l, uint16_t x_h, uint16_t y_l, uint16_t y_h, uint16_t pa,
     uint16_t pb, uint16_t pc, uint16_t pd, int& currentX, int& currentY,
-    int changed, uint32_t* line)
+    int changed, uint32_t* line, int r, int l)
 {
-    uint16_t* screenBase = (DISPCNT & 0x0010) ? (uint16_t*)&vram[0xa000] : (uint16_t*)&vram[0];
-    uint32_t prio = ((control & 3) << 25) + 0x1000000;
-
-    if (line == line0) {
-
-        linePrio[0] = (((1 << 2) - 1) & (control >> (1 - 1)));
-        realLinePrio[0] = (((1 << 2) - 1) & (control >> (1 - 1)));
-    }
-    if (line == line1) {
-
-        linePrio[1] = (((1 << 2) - 1) & (control >> (1 - 1)));
-        realLinePrio[1] = (((1 << 2) - 1) & (control >> (1 - 1)));
-    }
-    if (line == line2) {
-
-        linePrio[2] = (((1 << 2) - 1) & (control >> (1 - 1)));
-        realLinePrio[2] = (((1 << 2) - 1) & (control >> (1 - 1)));
-    }
-    if (line == line3) {
-
-        linePrio[3] = (((1 << 2) - 1) & (control >> (1 - 1)));
-        realLinePrio[3] = (((1 << 2) - 1) & (control >> (1 - 1)));
-    }
-
+    uint16_t* screenBase = (DISPCNT & 0x0010) ? (uint16_t*)&vramx[(r * enhance_multiplier) + l][0xa000] : (uint16_t*)&vramx[(r * enhance_multiplier) + l][0];
+    int prio = ((control & 3) << 25) + 0x1000000;
     int sizeX = 160;
     int sizeY = 128;
 
@@ -728,21 +661,14 @@ static inline void gfxDrawRotScreen16Bit160(uint16_t control, uint16_t x_l, uint
     }
 }
 
-static inline void gfxDrawSprites(uint32_t* lineOBJ)
+static inline void gfxDrawSprites(uint32_t* lineOBJ, int r, int l)
 {
-
     // lineOBJpix is used to keep track of the drawn OBJs
     // and to stop drawing them if the 'maximum number of OBJ per line'
     // has been reached.
     int lineOBJpix = (DISPCNT & 0x20) ? 954 : 1226;
-    
     int m = 0;
     gfxClearArray(lineOBJ);
-    for (int x = 0; x < 240; x++) {
-
-        lineOBJ[x] = ((customBackdropColor & 0x7FFF) | 0x30000000);
-
-    }
     if (layerEnable & 0x1000) {
         uint16_t* sprites = (uint16_t*)oam;
         uint16_t* spritePalette = &((uint16_t*)paletteRAM)[256];
@@ -751,6 +677,12 @@ static inline void gfxDrawSprites(uint32_t* lineOBJ)
         for (int x = 0; x < 128; x++) {
             uint16_t a0 = READ16LE(sprites++);
             uint16_t a1 = READ16LE(sprites++);
+            if (a1 & 0x1000) {
+                l = enhance_multiplier - 1 - l;
+            }
+            if (a1 & 0x2000) {
+                r = enhance_multiplier - 1 - r;
+            }
             uint16_t a2 = READ16LE(sprites++);
             sprites++;
 
@@ -884,7 +816,7 @@ static inline void gfxDrawSprites(uint32_t* lineOBJ)
                                     if (xxx < 0 || xxx >= sizeX || yyy < 0 || yyy >= sizeY || sx >= 240)
                                         ;
                                     else {
-                                        uint32_t color = vram
+                                        uint32_t color = vramx[(r * enhance_multiplier)+l]
                                             [0x10000 + ((((c + (yyy >> 3) * inc)
                                                              << 5)
                                                             + ((yyy & 7)
@@ -893,10 +825,35 @@ static inline void gfxDrawSprites(uint32_t* lineOBJ)
                                                                   << 6)
                                                             + (xxx & 7))
                                                            & 0x7FFF)];
-                                        if ((color == 0)) {
-                                            lineOBJ[sx] = ((customBackdropColor & 0x7FFF) | 0x30000000);
+                                        screenTileStartAddresses.push_back((0x10000 + ((((c + (yyy >> 3) * inc)
+                                            << 5)
+                                            + ((yyy & 7)
+                                                << 3)
+                                            + ((xxx >> 3)
+                                                << 6)
+                                            + (xxx & 7))
+                                            & 0x7FFF)) - (0x10000 + ((((c + (yyy >> 3) * inc)
+                                                << 5)
+                                                + ((yyy & 7)
+                                                    << 3)
+                                                + ((xxx >> 3)
+                                                    << 6)
+                                                + (xxx & 7))
+                                                & 0x7FFF) % 32));
+                                        screenTilePalettes.push_back(257);
+                                        if ((color == 0) && (((prio >> 25) & 3) < ((lineOBJ
+                                                                                           [sx]
+                                                                                       >> 25)
+                                                                                      & 3))) {
+                                            lineOBJ[sx] = (lineOBJ
+                                                                  [sx]
+                                                              & 0xF9FFFFFF)
+                                                | prio;
                                             if ((a0 & 0x1000) && m)
-                                                lineOBJ[sx] = ((customBackdropColor & 0x7FFF) | 0x30000000);
+                                                lineOBJ[sx] = (lineOBJ
+                                                                      [sx - 1]
+                                                                  & 0xF9FFFFFF)
+                                                    | prio;
                                         } else if (
                                             (color) && (prio < (lineOBJ[sx] & 0xFF000000))) {
                                             lineOBJ[sx] = READ16LE(
@@ -904,7 +861,10 @@ static inline void gfxDrawSprites(uint32_t* lineOBJ)
                                                                   [color])
                                                 | prio;
                                             if ((a0 & 0x1000) && m)
-                                                lineOBJ[sx] = ((customBackdropColor & 0x7FFF) | 0x30000000);
+                                                lineOBJ[sx] = (lineOBJ
+                                                                      [sx - 1]
+                                                                  & 0xF9FFFFFF)
+                                                    | prio;
                                         }
 
                                         if (a0 & 0x1000) {
@@ -940,7 +900,7 @@ static inline void gfxDrawSprites(uint32_t* lineOBJ)
                                     if (xxx < 0 || xxx >= sizeX || yyy < 0 || yyy >= sizeY || sx >= 240)
                                         ;
                                     else {
-                                        uint32_t color = vram
+                                        uint32_t color = vramx[(r * enhance_multiplier)+l]
                                             [0x10000 + ((((c + (yyy >> 3) * inc)
                                                              << 5)
                                                             + ((yyy & 7)
@@ -949,15 +909,40 @@ static inline void gfxDrawSprites(uint32_t* lineOBJ)
                                                                   << 5)
                                                             + ((xxx & 7) >> 1))
                                                            & 0x7FFF)];
+                                        screenTileStartAddresses.push_back((0x10000 + ((((c + (yyy >> 3) * inc)
+                                            << 5)
+                                            + ((yyy & 7)
+                                                << 2)
+                                            + ((xxx >> 3)
+                                                << 5)
+                                            + ((xxx & 7) >> 1))
+                                            & 0x7FFF)) - (0x10000 + ((((c + (yyy >> 3) * inc)
+                                                << 5)
+                                                + ((yyy & 7)
+                                                    << 2)
+                                                + ((xxx >> 3)
+                                                    << 5)
+                                                + ((xxx & 7) >> 1))
+                                                & 0x7FFF) % 32));
+                                        screenTilePalettes.push_back(257);
                                         if (xxx & 1)
                                             color >>= 4;
                                         else
                                             color &= 0x0F;
 
-                                        if ((color == 0)) {
-                                            lineOBJ[sx] = ((customBackdropColor & 0x7FFF) | 0x30000000);
+                                        if ((color == 0) && (((prio >> 25) & 3) < ((lineOBJ
+                                                                                           [sx]
+                                                                                       >> 25)
+                                                                                      & 3))) {
+                                            lineOBJ[sx] = (lineOBJ
+                                                                  [sx]
+                                                              & 0xF9FFFFFF)
+                                                | prio;
                                             if ((a0 & 0x1000) && m)
-                                                lineOBJ[sx] = ((customBackdropColor & 0x7FFF) | 0x30000000);
+                                                lineOBJ[sx] = (lineOBJ
+                                                                      [sx - 1]
+                                                                  & 0xF9FFFFFF)
+                                                    | prio;
                                         } else if (
                                             (color) && (prio < (lineOBJ[sx] & 0xFF000000))) {
                                             lineOBJ[sx] = READ16LE(
@@ -965,7 +950,10 @@ static inline void gfxDrawSprites(uint32_t* lineOBJ)
                                                                   [palette + color])
                                                 | prio;
                                             if ((a0 & 0x1000) && m)
-                                                lineOBJ[sx] = ((customBackdropColor & 0x7FFF) | 0x30000000);
+                                                lineOBJ[sx] = (lineOBJ
+                                                                      [sx - 1]
+                                                                  & 0xF9FFFFFF)
+                                                    | prio;
                                         }
                                     }
                                     if ((a0 & 0x1000) && m) {
@@ -1029,18 +1017,26 @@ static inline void gfxDrawSprites(uint32_t* lineOBJ)
                                 if (lineOBJpix < 0)
                                     continue;
                                 if (sx < 240) {
-                                    uint8_t color = vram[address];
-                                    if ((color == 0)) {
-                                        lineOBJ[sx] = ((customBackdropColor & 0x7FFF) | 0x30000000);
+                                    uint8_t color = vramx[(r * enhance_multiplier)+l][address];
+                                    screenTileStartAddresses.push_back(address - (address % 32));
+                                    screenTilePalettes.push_back(257);
+                                    if ((color == 0) && (((prio >> 25) & 3) < ((lineOBJ[sx] >> 25) & 3))) {
+                                        lineOBJ[sx] = (lineOBJ[sx] & 0xF9FFFFFF) | prio;
                                         if ((a0 & 0x1000) && m)
-                                            lineOBJ[sx] = ((customBackdropColor & 0x7FFF) | 0x30000000);
+                                            lineOBJ[sx] = (lineOBJ
+                                                                  [sx - 1]
+                                                              & 0xF9FFFFFF)
+                                                | prio;
                                     } else if ((color) && (prio < (lineOBJ[sx] & 0xFF000000))) {
                                         lineOBJ[sx] = READ16LE(
                                                           &spritePalette
                                                               [color])
                                             | prio;
                                         if ((a0 & 0x1000) && m)
-                                            lineOBJ[sx] = ((customBackdropColor & 0x7FFF) | 0x30000000);
+                                            lineOBJ[sx] = (lineOBJ
+                                                                  [sx - 1]
+                                                              & 0xF9FFFFFF)
+                                                | prio;
                                     }
 
                                     if (a0 & 0x1000) {
@@ -1099,6 +1095,7 @@ static inline void gfxDrawSprites(uint32_t* lineOBJ)
                             uint32_t prio = (((a2 >> 10) & 3) << 25) | ((a0 & 0x0c00) << 6);
                             int palette = (a2 >> 8) & 0xF0;
                             if (a1 & 0x1000) {
+                                
                                 xxx = 7;
                                 for (int xx = sizeX - 1; xx >= 0;
                                      xx--) {
@@ -1107,16 +1104,27 @@ static inline void gfxDrawSprites(uint32_t* lineOBJ)
                                     if (lineOBJpix < 0)
                                         continue;
                                     if (sx < 240) {
-                                        uint8_t color = vram[address];
+                                        uint8_t color = vramx[(r * enhance_multiplier)+l][address];
+                                        screenTileStartAddresses.push_back(address - (address % 32));
+                                        screenTilePalettes.push_back(257);
                                         if (xx & 1) {
                                             color = (color >> 4);
                                         } else
                                             color &= 0x0F;
 
-                                        if ((color == 0)) {
-                                            lineOBJ[sx] = ((customBackdropColor & 0x7FFF) | 0x30000000);
+                                        if ((color == 0) && (((prio >> 25) & 3) < ((lineOBJ
+                                                                                           [sx]
+                                                                                       >> 25)
+                                                                                      & 3))) {
+                                            lineOBJ[sx] = (lineOBJ
+                                                                  [sx]
+                                                              & 0xF9FFFFFF)
+                                                | prio;
                                             if ((a0 & 0x1000) && m)
-                                                lineOBJ[sx] = ((customBackdropColor & 0x7FFF) | 0x30000000);
+                                                lineOBJ[sx] = (lineOBJ
+                                                                      [sx - 1]
+                                                                  & 0xF9FFFFFF)
+                                                    | prio;
                                         } else if (
                                             (color) && (prio < (lineOBJ[sx] & 0xFF000000))) {
                                             lineOBJ[sx] = READ16LE(
@@ -1124,7 +1132,10 @@ static inline void gfxDrawSprites(uint32_t* lineOBJ)
                                                                   [palette + color])
                                                 | prio;
                                             if ((a0 & 0x1000) && m)
-                                                lineOBJ[sx] = ((customBackdropColor & 0x7FFF) | 0x30000000);
+                                                lineOBJ[sx] = (lineOBJ
+                                                                      [sx - 1]
+                                                                  & 0xF9FFFFFF)
+                                                    | prio;
                                         }
                                     }
                                     if (a0 & 0x1000) {
@@ -1154,16 +1165,27 @@ static inline void gfxDrawSprites(uint32_t* lineOBJ)
                                     if (lineOBJpix < 0)
                                         continue;
                                     if (sx < 240) {
-                                        uint8_t color = vram[address];
+                                        uint8_t color = vramx[(r * enhance_multiplier)+l][address];
+                                        screenTileStartAddresses.push_back(address - (address % 32));
+                                        screenTilePalettes.push_back(257);
                                         if (xx & 1) {
                                             color = (color >> 4);
                                         } else
                                             color &= 0x0F;
 
-                                        if ((color == 0)) {
-                                            lineOBJ[sx] = ((customBackdropColor & 0x7FFF) | 0x30000000);
+                                        if ((color == 0) && (((prio >> 25) & 3) < ((lineOBJ
+                                                                                           [sx]
+                                                                                       >> 25)
+                                                                                      & 3))) {
+                                            lineOBJ[sx] = (lineOBJ
+                                                                  [sx]
+                                                              & 0xF9FFFFFF)
+                                                | prio;
                                             if ((a0 & 0x1000) && m)
-                                                lineOBJ[sx] = ((customBackdropColor & 0x7FFF) | 0x30000000);
+                                                lineOBJ[sx] = (lineOBJ
+                                                                      [sx - 1]
+                                                                  & 0xF9FFFFFF)
+                                                    | prio;
                                         } else if (
                                             (color) && (prio < (lineOBJ[sx] & 0xFF000000))) {
                                             lineOBJ[sx] = READ16LE(
@@ -1171,7 +1193,10 @@ static inline void gfxDrawSprites(uint32_t* lineOBJ)
                                                                   [palette + color])
                                                 | prio;
                                             if ((a0 & 0x1000) && m)
-                                                lineOBJ[sx] = ((customBackdropColor & 0x7FFF) | 0x30000000);
+                                                lineOBJ[sx] = (lineOBJ
+                                                                      [sx - 1]
+                                                                  & 0xF9FFFFFF)
+                                                    | prio;
                                         }
                                     }
                                     if (a0 & 0x1000) {
@@ -1201,18 +1226,11 @@ static inline void gfxDrawSprites(uint32_t* lineOBJ)
             }
         }
     }
-    
 }
 
-static inline void gfxDrawOBJWin(uint32_t* lineOBJWin)
+static inline void gfxDrawOBJWin(uint32_t* lineOBJWin, int r, int l)
 {
-    
     gfxClearArray(lineOBJWin);
-    for (int x = 0; x < 240; x++) {
-
-        lineOBJWin[x] = ((customBackdropColor & 0x7FFF) | 0x30000000);
-
-    }
     if ((layerEnable & 0x9000) == 0x9000) {
         uint16_t* sprites = (uint16_t*)oam;
         // uint16_t *spritePalette = &((uint16_t *)paletteRAM)[256];
@@ -1314,13 +1332,13 @@ static inline void gfxDrawOBJWin(uint32_t* lineOBJWin)
 
                                 if (xxx < 0 || xxx >= sizeX || yyy < 0 || yyy >= sizeY || sx >= 240) {
                                 } else {
-                                    uint32_t color = vram
+                                    uint32_t color = vramx[(r * enhance_multiplier)+l]
                                         [0x10000 + ((((c + (yyy >> 3) * inc)
                                                          << 5)
                                                         + ((yyy & 7) << 3) + ((xxx >> 3) << 6) + (xxx & 7))
                                                        & 0x7fff)];
                                     if (color) {
-                                        lineOBJWin[sx] = ((customBackdropColor & 0x7FFF) | 0x30000000);
+                                        lineOBJWin[sx] = 1;
                                     }
                                 }
                                 sx = (sx + 1) & 511;
@@ -1353,7 +1371,7 @@ static inline void gfxDrawOBJWin(uint32_t* lineOBJWin)
                                 //              } else {
                                 if (xxx < 0 || xxx >= sizeX || yyy < 0 || yyy >= sizeY || sx >= 240) {
                                 } else {
-                                    uint32_t color = vram
+                                    uint32_t color = vramx[(r * enhance_multiplier)+l]
                                         [0x10000 + ((((c + (yyy >> 3) * inc)
                                                          << 5)
                                                         + ((yyy & 7) << 2) + ((xxx >> 3) << 5) + ((xxx & 7) >> 1))
@@ -1364,7 +1382,7 @@ static inline void gfxDrawOBJWin(uint32_t* lineOBJWin)
                                         color &= 0x0F;
 
                                     if (color) {
-                                        lineOBJWin[sx] = ((customBackdropColor & 0x7FFF) | 0x30000000);
+                                        lineOBJWin[sx] = 1;
                                     }
                                 }
                                 //            }
@@ -1414,9 +1432,11 @@ static inline void gfxDrawOBJWin(uint32_t* lineOBJWin)
                                 if (lineOBJpix < 0)
                                     continue;
                                 if (sx < 240) {
-                                    uint8_t color = vram[address];
+                                    uint8_t color = vramx[(r * enhance_multiplier)+l][address];
+                                    screenTileStartAddresses.push_back(address - (address % 32));
+                                    screenTilePalettes.push_back(257);
                                     if (color) {
-                                        lineOBJWin[sx] = ((customBackdropColor & 0x7FFF) | 0x30000000);
+                                        lineOBJWin[sx] = 1;
                                     }
                                 }
 
@@ -1468,7 +1488,9 @@ static inline void gfxDrawOBJWin(uint32_t* lineOBJWin)
                                     if (lineOBJpix < 0)
                                         continue;
                                     if (sx < 240) {
-                                        uint8_t color = vram[address];
+                                        uint8_t color = vramx[(r * enhance_multiplier)+l][address];
+                                        screenTileStartAddresses.push_back(address - (address % 32));
+                                        screenTilePalettes.push_back(257);
                                         if (xx & 1) {
                                             color = (color >> 4);
                                         } else
@@ -1477,7 +1499,7 @@ static inline void gfxDrawOBJWin(uint32_t* lineOBJWin)
                                         if (color) {
                                             lineOBJWin
                                                 [sx]
-                                                = ((customBackdropColor & 0x7FFF) | 0x30000000);
+                                                = 1;
                                         }
                                     }
                                     sx = (sx + 1) & 511;
@@ -1498,7 +1520,9 @@ static inline void gfxDrawOBJWin(uint32_t* lineOBJWin)
                                     if (lineOBJpix < 0)
                                         continue;
                                     if (sx < 240) {
-                                        uint8_t color = vram[address];
+                                        uint8_t color = vramx[(r * enhance_multiplier)+l][address];
+                                        screenTileStartAddresses.push_back(address - (address % 32));
+                                        screenTilePalettes.push_back(257);
                                         if (xx & 1) {
                                             color = (color >> 4);
                                         } else
@@ -1507,7 +1531,7 @@ static inline void gfxDrawOBJWin(uint32_t* lineOBJWin)
                                         if (color) {
                                             lineOBJWin
                                                 [sx]
-                                                = ((customBackdropColor & 0x7FFF) | 0x30000000);
+                                                = 1;
                                         }
                                     }
                                     sx = (sx + 1) & 511;
@@ -1528,7 +1552,6 @@ static inline void gfxDrawOBJWin(uint32_t* lineOBJWin)
             }
         }
     }
-    
 }
 
 static inline uint32_t gfxIncreaseBrightness(uint32_t color, int coeff)

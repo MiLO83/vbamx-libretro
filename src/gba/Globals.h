@@ -1,8 +1,8 @@
 #ifndef GLOBALS_H
 #define GLOBALS_H
-
 #include "GBA.h"
-
+#include <list>
+#include <string>
 #define VERBOSE_SWI 1
 #define VERBOSE_UNALIGNED_MEMORY 2
 #define VERBOSE_ILLEGAL_WRITE 4
@@ -14,6 +14,7 @@
 #define VERBOSE_UNDEFINED 256
 #define VERBOSE_AGBPRINT 512
 #define VERBOSE_SOUNDOUTPUT 1024
+
 
 extern reg_pair reg[45];
 extern bool ioReadable[0x400];
@@ -41,8 +42,8 @@ extern uint8_t* internalRAM;
 extern uint8_t* workRAM;
 extern uint8_t* paletteRAM;
 extern uint8_t* vram;
-extern uint8_t* pix[7];
-extern uint8_t* lpix;
+extern uint8_t* vramx[16];
+extern uint8_t* pix;
 extern uint8_t* oam;
 extern uint8_t* ioMem;
 
@@ -123,5 +124,35 @@ extern uint16_t P1;
 extern uint16_t IE;
 extern uint16_t IF;
 extern uint16_t IME;
-
+extern uint8_t enhance_multiplier;
+extern uint16_t dumpWait;
+extern uint16_t dumpIntreval;
+extern uint16_t loadWait;
+extern uint16_t loadIntreval;
+extern bool dumpScreen;
+extern bool loadTiles;
+extern std::string screendump;
+extern std::string screenfile;
+extern std::string vramdump;
+extern std::string vramfile;
+extern bool option_loadTiles;
+extern bool option_dumpTiles;
+extern std::list<uint32_t> screenTileStartAddresses;
+extern std::list<uint32_t>::iterator screenTileStartAddressesit;
+extern std::list<uint32_t> screenTilePalettes;
+extern std::list<uint32_t>::iterator screenTilePalettesit;
+extern std::list<uint32_t> bpp4Writes;
+extern std::list<uint32_t> bpp8Writes;
+extern std::list<uint32_t> bpp4Palettes;
+extern std::list<uint32_t> bpp8Palettes;
+extern std::list<uint32_t> bpp4Processed;
+extern std::list<uint32_t> bpp8Processed;
+extern std::list<std::string> filedoesnotexist;
+extern std::list<std::string>::iterator filedoesnotexistit;
+extern std::list<uint32_t>::iterator bpp4it;
+extern std::list<uint32_t>::iterator bpp8it;
+extern std::list<uint32_t>::iterator bpp4Palettesit;
+extern std::list<uint32_t>::iterator bpp8Palettesit;
+extern std::list<uint32_t>::iterator bpp4Processedit;
+extern std::list<uint32_t>::iterator bpp8Processedit;
 #endif // GLOBALS_H

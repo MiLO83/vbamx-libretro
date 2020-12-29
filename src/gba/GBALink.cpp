@@ -88,6 +88,8 @@ BLARGG_DEF_MIN_MAX(double)
 
 #endif // not clang
 
+
+
 // Joybus
 bool gba_joybus_enabled = false;
 bool gba_joybus_active = false;

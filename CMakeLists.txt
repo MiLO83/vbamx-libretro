@@ -1,3 +1,5 @@
+set(CMAKE_C_COMPILER "/usr/bin/gcc")
+set(CMAKE_CXX_COMPILER "/usr/bin/g++")
 if(COMMAND cmake_policy)
     cmake_policy(SET CMP0003 NEW) # link to full path of libs
     cmake_policy(SET CMP0005 NEW) # escapes in add_definitions
@@ -622,6 +624,8 @@ set(
     src/common/Patch.cpp
     src/common/memgzio.c
     src/common/SoundSDL.cpp
+    src/common/EasyBMP/EasyBMP.cpp
+    src/common/sha256.cpp
 )
 
 if(MSVC)
@@ -640,6 +644,8 @@ set(
     src/common/Port.h
     src/common/SoundDriver.h
     src/common/SoundSDL.h
+    src/common/EasyBMP/EasyBMP.h
+    src/common/sha256.h
 )
 
 if(MSVC)
